@@ -353,6 +353,7 @@ class InsetsPolicy {
         state = adjustVisibilityForIme(target, state, state == originalState);
         state = mPolicy.replaceInsetsSourcesIfNeeded(state, state == originalState);
         state = adjustInsetsForRoundedCorners(target.mToken, state, state == originalState);
+        state = PopUpWindowController.getInstance().adjustInsetsForWindow(target, state);
         return adjustInsetsForForceLongScreen(target, state, state == originalState);
     }
 
@@ -797,9 +798,10 @@ class InsetsPolicy {
     }
 
     void updateSystemBars(@Nullable WindowState win, @InsetsType int displayForciblyShowingTypes,
-            @InsetsType int displayForciblyHidingTypes, boolean showSystemBarsByLegacyPolicy) {
+            @InsetsType int displayForciblyHidingTypes, boolean showSystemBarsByLegacyPolicy, boolean inPortPopUpView) {
         final boolean hasDisplayOverride = displayForciblyShowingTypes != 0
-                || displayForciblyHidingTypes != 0;
+                || displayForciblyHidingTypes != 0
+                || inPortPopUpView;
         mForciblyShowingTypes =
                 // Force showing navigation bar as long as forceShowingNavigationBars returns true.
                 (forceShowingNavigationBars(win)

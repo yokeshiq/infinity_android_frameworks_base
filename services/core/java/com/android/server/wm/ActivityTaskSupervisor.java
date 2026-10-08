@@ -105,6 +105,7 @@ import android.app.ProfilerInfo;
 import android.app.ResultInfo;
 import android.app.TaskInfo;
 import android.app.WaitResult;
+import android.app.WindowConfiguration;
 import android.app.servertransaction.ActivityLifecycleItem;
 import android.app.servertransaction.LaunchActivityItem;
 import android.app.servertransaction.PauseActivityItem;
@@ -1745,11 +1746,18 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     boolean canUseActivityOptionsLaunchBounds(ActivityOptions options) {
         // We use the launch bounds in the activity options is the device supports freeform
         // window management or is launching into the root pinned task.
-        if (options == null || options.getLaunchBounds() == null) {
+        if (options == null) {
+            return false;
+        }
+        final int windowingMode = options.getLaunchWindowingMode();
+        if (WindowConfiguration.isPopUpWindowMode(windowingMode)) {
+            return true;
+        }
+        if (options.getLaunchBounds() == null) {
             return false;
         }
         return (mService.mSupportsPictureInPicture
-                && options.getLaunchWindowingMode() == WINDOWING_MODE_PINNED)
+                && windowingMode == WINDOWING_MODE_PINNED)
                 || mService.mSupportsFreeformWindowManagement;
     }
 
@@ -1860,7 +1868,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         final ActionChain chain = mService.mChainTracker.startTransit("removeTask");
         final boolean wasCollecting = chain.isCollecting();
         if (!wasCollecting) {
-            chain.attachTransition(task.mTransitionController.requestCloseTransitionIfNeeded(task));
+            chain.attachTransition(task.mTransitionController.requestCloseTransitionIfNeeded(task, true));
         }
         chain.collectClose(task);
         final Transition transition = chain.getTransition();
@@ -2984,8 +2992,10 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                                 callingPid, callingUid) == PERMISSION_GRANTED)) {
                     mRecentTasks.setFreezeTaskListReordering();
                 }
-                if (activityOptions.getLaunchRootTask() != null) {
-                    // Don't move home activity forward if there is a launch root set.
+                if (activityOptions.getLaunchRootTask() != null ||
+                        WindowConfiguration.isPopUpWindowMode(activityOptions.getLaunchWindowingMode())) {
+                    // Don't move home activity forward if there is a launch root set
+                    // or we are launching into Pop-Up View.
                     moveHomeTaskForward = false;
                 }
             }
@@ -3031,6 +3041,10 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
 
                 AxSandboxService.get().clearUnlockedApp();
                 AxSandboxService.get().lockTopApp(task, "startActivityFromRecents");
+
+                if (PopUpWindowController.getInstance().startActivityFromRecents(task, activityOptions)) {
+                    return ActivityManager.START_TASK_TO_FRONT;
+                }
 
                 if (moveHomeTaskForward) {
                     // We always want to return to the home activity instead of the recents

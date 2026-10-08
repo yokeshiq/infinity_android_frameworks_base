@@ -1360,6 +1360,9 @@ public final class ViewRootImpl implements ViewParent,
     private final boolean mDisableDrawWakeLock;
     private boolean mEnforceThreadChecksCompat;
 
+    /** @hide */
+    private final ViewRootImplExt mImplExt = new ViewRootImplExt(this);
+
     private String mTag = TAG;
     private String mDrawTrace = "draw-" + mTag; // cache to avoid allocating on each frame
     private String mFpsTraceName;
@@ -2515,6 +2518,7 @@ public final class ViewRootImpl implements ViewParent,
                 mAppVisibilityChanged = true;
                 scheduleTraversals();
             }
+            mImplExt.handleAppVisibility(visible);
             // Only enable if the window is not already removed (via earlier call to doDie())
             if (!mRemoved || !mAppVisible) {
                 AnimationHandler.requestAnimatorsEnabled(mAppVisible, this);
@@ -7212,6 +7216,8 @@ public final class ViewRootImpl implements ViewParent,
         mInsetsController.onBoundsChanged(bounds);
 
         mForceNextConfigUpdate = false;
+
+        mImplExt.performConfigurationChange(overrideConfig);
     }
 
     /**
@@ -11481,6 +11487,9 @@ public final class ViewRootImpl implements ViewParent,
         @Override
         public void onInputEvent(InputEvent event) {
             processRawInputEvent(event);
+            if (event instanceof MotionEvent) {
+                mImplExt.onMotionEvent((MotionEvent) event);
+            }
         }
 
         @Override

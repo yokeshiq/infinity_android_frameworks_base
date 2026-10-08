@@ -67,6 +67,8 @@ import static com.android.server.wm.ActivityTaskManagerService.checkPermission;
 import static com.android.server.wm.ActivityTaskSupervisor.printThisActivity;
 import static com.android.server.wm.AppCompatSandboxingPolicy.ConfigOverrideHint;
 
+import static org.rising.DebugConstants.DEBUG_POP_UP;
+
 import android.annotation.CallSuper;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -1275,7 +1277,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     ActivityRecord topRunningActivity(boolean focusableOnly) {
         // Split into 2 to avoid object creation due to variable capture.
         if (focusableOnly) {
-            return getActivity((r) -> r.canBeTopRunning() && r.isFocusable());
+            return getActivity((r) -> r.canBeTopRunning() && r.isFocusableOrPopUpView());
         }
         return getActivity(ActivityRecord::canBeTopRunning);
     }
@@ -1338,6 +1340,12 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         return abort;
     }
 
+    boolean isTopActivityFocusableOrPinWindow() {
+        final ActivityRecord r = topRunningActivity();
+        return r != null ? r.isFocusableOrPopUpView()
+                : (isFocusable() && getWindowConfiguration().canReceiveKeys());
+    }
+
     /**
      * Returns the visibility state of this TaskFragment.
      *
@@ -1345,7 +1353,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
      */
     @TaskFragmentVisibility
     int getVisibility(ActivityRecord starting) {
-        return mAtmService.mVisibilityHelper.getTaskFragmentVisibility(this, starting);
+    return mAtmService.mVisibilityHelper.getTaskFragmentVisibility(this, starting);
     }
 
     final void updateActivityVisibilities(@Nullable ActivityRecord starting,
@@ -1733,12 +1741,16 @@ class TaskFragment extends WindowContainer<WindowContainer> {
      */
     boolean canBeResumed(@Nullable ActivityRecord starting) {
         // No need to resume activity in TaskFragment that is not visible.
-        return isTopActivityFocusable()
+        return isTopActivityFocusableOrPinWindow()
                 && getVisibility(starting) == TASK_FRAGMENT_VISIBILITY_VISIBLE;
     }
 
     boolean isFocusableAndVisible() {
         return isTopActivityFocusable() && shouldBeVisible(null /* starting */);
+    }
+
+    boolean isFocusableAndVisibleOrPinWindow() {
+        return isTopActivityFocusableOrPinWindow() && shouldBeVisible(null /* starting */);
     }
 
     final boolean startPausing(boolean uiSleeping, ActivityRecord resuming, String reason) {
@@ -1822,7 +1834,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         boolean pauseImmediately = false;
         final boolean shouldAutoPip = shouldAutoPip(resuming, pausing, userLeaving);
         final boolean lastResumedCanPip = pausing.checkEnterPictureInPictureState(
-                "shouldAutoPipWhilePausing", userLeaving);
+                "shouldAutoPipWhilePausing", userLeaving)
+                && !"PopUpWindowController.moveActivityTaskToBackInner".equals(reason);
         if (!shouldAutoPip && !lastResumedCanPip && resuming != null) {
             // If the flag RESUME_WHILE_PAUSING is set, then continue to schedule the previous
             // activity to be paused.
@@ -2271,6 +2284,13 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         }
         if (!task.isResizeable() && !tda.supportsNonResizableMultiWindow()) {
             // Not support non-resizable in multi window.
+            return false;
+        }
+        if (getTask().getWindowConfiguration().isPopUpWindowMode() &&
+                !ActivityInfo.isResizeableMode(getTask().mResizeMode)) {
+            if (DEBUG_POP_UP) {
+                Slog.d(TAG, "Not support pop-up view in multi window.");
+            }
             return false;
         }
 

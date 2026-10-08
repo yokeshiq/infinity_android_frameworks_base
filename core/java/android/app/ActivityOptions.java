@@ -1392,6 +1392,9 @@ public class ActivityOptions extends ComponentOptions {
      * @return {@code this} {@link ActivityOptions} instance
      */
     public ActivityOptions setLaunchBounds(@Nullable Rect screenSpacePixelRect) {
+        if (ActivityOptionsExt.hookLauncherSetLaunchBounds()) {
+            return this;
+        }
         mLaunchBounds = screenSpacePixelRect != null ? new Rect(screenSpacePixelRect) : null;
         return this;
     }
@@ -1774,6 +1777,10 @@ public class ActivityOptions extends ComponentOptions {
      */
     @TestApi
     public void setLaunchWindowingMode(@WindowConfiguration.WindowingMode int windowingMode) {
+        if (ActivityOptionsExt.hookLauncherSetFreeform(windowingMode)) {
+            mLaunchWindowingMode = WindowConfiguration.WINDOWING_MODE_MINI_WINDOW_EXT;
+            return;
+        }
         mLaunchWindowingMode = windowingMode;
     }
 

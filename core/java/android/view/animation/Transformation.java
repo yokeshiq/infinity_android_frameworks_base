@@ -56,6 +56,8 @@ public class Transformation {
 
     private Insets mInsets = Insets.NONE;
 
+    private float mCornerRadius = 0.0f;
+
     /**
      * Creates a new transformation with alpha = 1 and the identity matrix.
      */
@@ -79,6 +81,7 @@ public class Transformation {
         mAlpha = 1.0f;
         mTransformationType = TYPE_BOTH;
         mInsets = Insets.NONE;
+        mCornerRadius = 0.0f;
     }
 
     /**
@@ -236,6 +239,22 @@ public class Transformation {
      */
     public Insets getInsets() {
         return mInsets;
+    }
+
+    /**
+     * Sets the corner radius for the transformation
+     * @hide
+     */
+    public void setCornerRadius(float cornerRadius) {
+        mCornerRadius = cornerRadius;
+    }
+
+    /**
+     * Returns the corner radius for the transformation
+     * @hide
+     */
+    public float getCornerRadius() {
+        return mCornerRadius;
     }
 
     @Override

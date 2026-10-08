@@ -7291,7 +7291,7 @@
     <!-- Toast message that is shown when dream is triggered by short press power button. [CHAR LIMIT=TOAST] -->
     <string name="long_press_power_to_turn_off_tv_toast">Long press Power button to turn off TV</string>
 
-    <!-- Supervision strings -->
+<!-- Supervision strings -->
     <string name="supervision_blocked_app_title">Update from your parent</string>
     <string name="supervision_blocked_app_content"><xliff:g id="app_name" example="YouTube">%1$s</xliff:g> was removed for now</string>
     <string name="supervision_unblocked_app_content"><xliff:g id="app_name" example="YouTube">%1$s</xliff:g> is now available</string>
@@ -7320,4 +7320,7 @@
     <string name="do_not_disturb_sync_notification_title">Do not disturb</string>
     <!-- Notification content for Do not disturb sync [CHAR LIMIT=NONE] -->
     <string name="do_not_disturb_sync_notification_content">Synced from your nearby device</string>
+
+    <!-- Launcher shortcut: Pop-Up View -->
+    <string name="recent_task_option_pop_up">Pop-Up View</string>
 </resources>
