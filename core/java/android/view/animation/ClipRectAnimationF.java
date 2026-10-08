@@ -20,7 +20,9 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 
 /**
- * An animation that controls the clip of an object.
+ * An animation that controls the clip of an object. See the
+ * {@link android.view.animation full package} description for details and
+ * sample code.
  *
  * @hide
  */
@@ -33,7 +35,7 @@ public class ClipRectAnimationF extends Animation {
     protected Rect mResolvedTo = new Rect();
 
     /**
-     * Constructor to use when building a ClipRectAnimationF from code.
+     * Constructor to use when building a ClipRectAnimationF from code
      *
      * @param fromClip the clip rect to animate from
      * @param toClip the clip rect to animate to
@@ -47,7 +49,7 @@ public class ClipRectAnimationF extends Animation {
     }
 
     /**
-     * Constructor to use when building a ClipRectAnimationF from code.
+     * Constructor to use when building a ClipRectAnimationF from code
      */
     public ClipRectAnimationF(int fromL, int fromT, int fromR, int fromB,
             int toL, int toT, int toR, int toB) {
@@ -58,7 +60,7 @@ public class ClipRectAnimationF extends Animation {
     }
 
     public ClipRectAnimationF(float fromL, float fromT, float fromR, float fromB,
-            float toL, float toT, float toR, float toB) {
+                             float toL, float toT, float toR, float toB) {
         mFromRectF.set(fromL, fromT, fromR, fromB);
         mToRectF.set(toL, toT, toR, toB);
     }

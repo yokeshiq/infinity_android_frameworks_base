@@ -210,7 +210,8 @@ public class ActionChain {
     void collectClose(@NonNull WindowContainer<?> wc) {
         if (!wc.mTransitionController.isShellTransitionsEnabled()) return;
         final Transition transition = expectCollecting();
-        if (transition != null && (Transition.allowsInvisibleExistenceChange(wc) || wc.isVisibleRequested())) {
+if (transition == null) return;
+        if (Transition.allowsInvisibleExistenceChange(wc) || wc.isVisibleRequested()) {
             transition.collectExistenceChange(wc);
         } else {
             // Removing a non-visible window doesn't require a transition, but if there is one

@@ -7977,7 +7977,7 @@
         and com.android.* namespace. -->
     <string-array name="config_watchFacePermissions" translatable="false"/>
 
-    <!-- Whether the device supports Interactive Doze mode. -->
+<!-- Whether the device supports Interactive Doze mode. -->
     <bool name="config_enableInteractiveDoze">false</bool>
 
     <!-- Whether to force color fade. -->
@@ -7986,18 +7986,18 @@
     <!-- location button service components -->
     <string name="config_locationButtonRenderService" translatable="false">com.android.systemui/.locationbutton.LocationButtonRenderService</string>
 
-     <!-- Whether user information setup is enabled in SuW. -->
+    <!-- Whether user information setup is enabled in SuW. -->
     <bool name="config_enableUserInfoSetupInSuw">false</bool>
 
-     <!-- Whether inset focus rings are enabled in SuW. -->
+    <!-- Whether inset focus rings are enabled in SuW. -->
     <bool name="config_enableInsetFocusRingsInSuw">false</bool>
 
-     <!-- Adapt the default WindowManager behavior onBackPressed so that root activities are
-     not finished, regardless of the startup source or whether the intent was ACTION_MAIN.
-     This is particularly useful for Wear OS to better suit the wearable user experience and
-     improve performance. If the application overrides onBackPressed, this configuration will
-     be ignored. -->
-     <bool name="config_alwaysMoveTaskToBackOnBackPressed">false</bool>
+    <!-- Adapt the default WindowManager behavior onBackPressed so that root activities are
+    not finished, regardless of the startup source or whether the intent was ACTION_MAIN.
+    This is particularly useful for Wear OS to better suit the wearable user experience and
+    improve performance. If the application overrides onBackPressed, this configuration will
+    be ignored. -->
+    <bool name="config_alwaysMoveTaskToBackOnBackPressed">false</bool>
 
     <!-- Whether to override wfc roaming mode while using ntn. -->
     <bool name="config_override_wfc_roaming_mode_while_using_ntn">true</bool>
@@ -8008,10 +8008,10 @@
     <!-- Whether contextual mode (e.g. Do Not Disturb Mode) sync is supported by this device. -->
     <bool name="config_supportContextualModeSync">true</bool>
 
-     <!-- Whether to enable app launch blur -->
+    <!-- Whether to enable app launch blur -->
     <bool name="config_enableAppLaunchBlur">true</bool>
 
-     <!-- Whether to enable blur expansion (surface blurs) -->
+    <!-- Whether to enable blur expansion (surface blurs) -->
     <bool name="config_enableBlurExpansion">true</bool>
 
     <!-- Whether the native_serial service is supported by this device. -->
@@ -8067,11 +8067,11 @@
     <!-- The merge strategy for default text classifier and personal context results.
          These three strategies are accepted:
          * 0 (DEFAULT_PRIORITY): Default text classifier results are prioritized. Personal context
-            results are appended to the end.
+           results are appended to the end.
          * 1 (PERSONAL_CONTEXT_PRIORITY): Personal context results are prioritized. Default text
-            classifier results are appended to the end.
+           classifier results are appended to the end.
          * 2 (PERSONAL_CONTEXT_OVERRIDE): When present, personal context results are taken and the
-            default text classifier result is dropped. -->
+           default text classifier result is dropped. -->
     <integer name="config_textClassifierPersonalContextMergeStrategy">0</integer>
 
     <!-- Whether the Wear-specific charging experience is enabled -->
@@ -8087,4 +8087,15 @@
 
     <!-- Whether to explicitly disable the Video capability over IWLAN when Wi-Fi Calling is turned off. -->
     <bool name="config_disable_video_capability_when_wfc_off">false</bool>
+
+    <!-- Pop-Up View -->
+    <bool name="config_popUpView_defaultNotificationPortJump">false</bool>
+    <bool name="config_popUpView_defaultNotificationLandJump">false</bool>
+    <string-array name="config_popUpView_forceUpdateDpiPackages" translatable="false">
+    </string-array>
+    <bool name="config_popUpView_defaultKeepMuteInMini">true</bool>
+    <integer name="config_popUpView_defaultSingleTapAction">1</integer>
+    <integer name="config_popUpView_defaultDoubleTapAction">2</integer>
+    <bool name="config_popUpView_defaultSettingsJump">true</bool>
+    <bool name="config_popUpView_defaultShareJump">true</bool>
 </resources>

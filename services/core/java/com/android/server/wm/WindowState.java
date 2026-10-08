@@ -1316,6 +1316,8 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         setDrawnStateEvaluated(false /*evaluated*/);
 
         getDisplayContent().reapplyMagnificationSpec();
+
+        PopUpWindowController.getInstance().onWindowAdd(newParent, this);
     }
 
     /** Returns the uid of the app that owns this window. */
@@ -1754,6 +1756,10 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         return mSession.mUid;
     }
 
+    public IWindow getIWindow() {
+        return mClient;
+    }
+
     Task getTask() {
         return mActivityRecord != null ? mActivityRecord.getTask() : null;
     }
@@ -2019,7 +2025,7 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
      *         case when the surface is on screen but not exiting.
      */
     boolean canAffectSystemUiFlags() {
-        if (isFullyTransparent()) {
+        if (isFullyTransparent() || getWindowConfiguration().isPopUpWindowMode()) {
             return false;
         }
         if (mActivityRecord == null) {
@@ -2379,6 +2385,9 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         super.removeImmediately();
 
         final DisplayContent dc = getDisplayContent();
+
+        PopUpWindowController.getInstance().onWindowRemove(this);
+
         if (isImeLayeringTarget()) {
             // Remove the attached IME screenshot.
             dc.removeImeScreenshotByTarget(this);
@@ -3059,6 +3068,15 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         if (mActivityRecord == null  || mActivityRecord.getTask() == null) {
             return true;
         }
+        final Task task = mActivityRecord.getTask();
+        final Task rootTask = task.getRootTask();
+        // 增加对 Task 与 RootTask 的 Pinned 模式判断
+        if (getWindowConfiguration().isPinnedExtWindowMode()
+                || task.getWindowConfiguration().isPinnedExtWindowMode()
+                || (rootTask != null && rootTask.getWindowConfiguration().isPinnedExtWindowMode())) {
+            return false;
+        }
+
         // During transient launch, the transient-hide windows are not visibleRequested
         // or on-top but are kept focusable and thus can receive touch input.
         if (mTransitionController.shouldKeepFocus(mActivityRecord)) {
@@ -3070,7 +3088,7 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         if (mWmService.mAtmService.mBackNavigationController.shouldPauseTouch(mActivityRecord)) {
             return false;
         }
-        return !mActivityRecord.getTask().getRootTask().shouldIgnoreInput()
+        return !task.getRootTask().shouldIgnoreInput()
                 && mActivityRecord.isVisibleRequested();
     }
 

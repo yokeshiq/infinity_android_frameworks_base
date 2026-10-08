@@ -132,7 +132,10 @@ public class SystemSettings {
                 Settings.System.CV_PREFERRED_INTENSITY,
                 Settings.System.PEAK_REFRESH_RATE,
                 Settings.System.MIN_REFRESH_RATE,
-                Settings.System.ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE
+                Settings.System.ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE,
+                Settings.System.POP_UP_NOTIFICATION_JUMP_PORTRAIT,
+                Settings.System.POP_UP_NOTIFICATION_JUMP_LANDSCAPE,
+                Settings.System.POP_UP_NOTIFICATION_BLACKLIST
         ));
         return settings.toArray(new String[0]);
     }

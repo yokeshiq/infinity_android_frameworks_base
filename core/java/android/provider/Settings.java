@@ -5558,6 +5558,38 @@ public final class Settings {
         public static final String PEAK_REFRESH_RATE = "peak_refresh_rate";
 
         /**
+         * Whether to use Pop-Up Window for notification app jump in portrait mode
+         * @hide
+         */
+        public static final String POP_UP_NOTIFICATION_JUMP_PORTRAIT = "pop_up_notification_jump_portrait";
+
+        /**
+         * Whether to use Pop-Up Window for notification app jump in landscape mode
+         * @hide
+         */
+        public static final String POP_UP_NOTIFICATION_JUMP_LANDSCAPE = "pop_up_notification_jump_landscape";
+
+        /**
+         * Blacklist apps that disallow from opening notification in Pop-Up View
+         * @hide
+         */
+        public static final String POP_UP_NOTIFICATION_BLACKLIST = "pop_up_notification_blacklist";
+
+        /**
+         * Pop-Up Window dimmer view single tap action
+         * 0: Enter pinned-window mode   1: Exit Pop-Up View   2: No action
+         * @hide
+         */
+        public static final String POP_UP_SINGLE_TAP_ACTION = "pop_up_single_tap_action";
+
+        /**
+         * Pop-Up Window dimmer view double tap action
+         * 0: Enter pinned-window mode   1: Exit Pop-Up View   2: No action
+         * @hide
+         */
+        public static final String POP_UP_DOUBLE_TAP_ACTION = "pop_up_double_tap_action";
+
+        /**
          * Control lock behavior on fold
          *
          * If this isn't set, the system falls back to a device specific default.
@@ -16228,6 +16260,13 @@ public final class Settings {
          */
         @Readable
         public static final String UNLOCK_SOUND = "unlock_sound";
+
+        /**
+         * Display width set by custom display resolution controller
+         *
+         * @hide
+         */
+        public static final String DISPLAY_WIDTH_CUSTOM = "display_width_custom";
 
         /**
          * URI for the "device is trusted" sound, which is played when the device enters the trusted

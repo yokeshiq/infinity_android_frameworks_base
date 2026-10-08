@@ -70,6 +70,7 @@ import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION_STARTING;
 import static android.view.WindowManager.LayoutParams.TYPE_BASE_APPLICATION;
 import static android.view.WindowManager.TRANSIT_CLOSE;
 import static android.view.WindowManager.TRANSIT_FLAG_APP_CRASHED;
+import static android.view.WindowManager.TRANSIT_FLAG_MOVE_TASK_TO_BACK;
 import static android.view.WindowManager.TRANSIT_OPEN;
 import static android.view.WindowManager.TRANSIT_TO_BACK;
 import static android.view.WindowManager.TRANSIT_TO_FRONT;
@@ -113,6 +114,8 @@ import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_TASK_MOVEMENT
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 
 import static java.lang.Integer.MAX_VALUE;
+
+import static org.rising.DebugConstants.DEBUG_POP_UP;
 
 import android.annotation.CallSuper;
 import android.annotation.IntDef;
@@ -763,6 +766,8 @@ class Task extends TaskFragment {
         mShouldIgnoreInsets = shouldIgnoreInsets;
         mDisableAppCompatRoundedCorners = disableAppCompatRoundedCorners;
         EventLogTags.writeWmTaskCreated(mTaskId);
+
+        mWindowContainerExt.initTask(this);
     }
 
     static Task fromWindowContainerToken(WindowContainerToken token) {
@@ -1764,6 +1769,7 @@ class Task extends TaskFragment {
                         !REMOVE_FROM_RECENTS, reason);
             }
         } else if (!mReuseTask && shouldRemoveSelfOnLastChildRemoval()) {
+            PopUpWindowController.getInstance().removeChild(this);
             reason += ", last child = " + r + " in " + this;
             removeIfPossible(reason);
         }
@@ -2260,9 +2266,11 @@ class Task extends TaskFragment {
             mTaskSupervisor.scheduleUpdateMultiWindowMode(this);
         }
 
-        if (shouldStartChangeTransition(prevWinMode, mTmpPrevBounds)) {
-            mTransitionController.collectVisibleChange(this);
-        }
+	mWindowContainerExt.transitionFreeze(this);
+	if (shouldStartChangeTransition(prevWinMode, mTmpPrevBounds)) {
+	    mTransitionController.collectVisibleChange(this);
+	    PopUpWindowController.getInstance().shouldInitializeChangeTransition(this, prevWinMode);
+	}
 
         // If the configuration supports persistent bounds (eg. Freeform), keep track of the
         // current (non-fullscreen) bounds for persistence.
@@ -2347,6 +2355,7 @@ class Task extends TaskFragment {
         if (prevWindowingMode != getWindowingMode()) {
             taskDisplayArea.onRootTaskWindowingModeChanged(this);
             IAxSandboxService.get().onWindowingModeChanged(this, prevWindowingMode);
+            mWindowContainerExt.onWindowingModeChanged(prevWindowingMode);
         }
 
         if (!isOrganized() && !getRequestedOverrideBounds().isEmpty() && mDisplayContent != null) {
@@ -2365,6 +2374,10 @@ class Task extends TaskFragment {
             // can be toggled when the windowing mode changes. We must make sure the root task is
             // placed properly when always on top state changes.
             taskDisplayArea.positionChildAt(POSITION_TOP, this, false /* includingParents */);
+        }
+
+        if (prevRotation != getWindowConfiguration().getRotation()) {
+            PopUpWindowController.getInstance().onRotationChanged(this);
         }
     }
 
@@ -2535,6 +2548,9 @@ class Task extends TaskFragment {
             final Rect newBounds = getConfiguration().windowConfiguration.getBounds();
             return prevWinMode != newWinMode || prevBounds.width() != newBounds.width()
                     || prevBounds.height() != newBounds.height();
+        }
+        if (PopUpWindowController.getInstance().shouldStartChangeTransition(prevWinMode, newWinMode)) {
+            return true;
         }
         // Only do an animation into and out-of freeform mode for now. Other mode
         // transition animations are currently handled by system-ui.
@@ -3127,8 +3143,9 @@ class Task extends TaskFragment {
                 && getActivityType() == ACTIVITY_TYPE_STANDARD;
         if (forceResizable) return true;
         if (mForceNonResizeOverride) return false;
-        return mForceResizeOverride || ActivityInfo.isResizeableMode(mResizeMode)
-                || (mSupportsPictureInPicture && checkPictureInPictureSupport);
+	return mForceResizeOverride || ActivityInfo.isResizeableMode(mResizeMode)
+        	|| getWindowConfiguration().isPopUpWindowMode()
+	        || (mSupportsPictureInPicture && checkPictureInPictureSupport);
     }
 
     /**
@@ -3445,6 +3462,8 @@ class Task extends TaskFragment {
             mTaskInputSink.applyChangesToSurfaceIfChanged(getPendingTransaction());
         }
         super.prepareSurfaces();
+        final SurfaceControl.Transaction t = getSyncTransaction();
+        PopUpWindowController.getInstance().onPrepareSurfaces(this, t);
     }
 
     /**
@@ -5053,6 +5072,8 @@ class Task extends TaskFragment {
                 super.setWindowingMode(windowingMode);
             }
 
+            PopUpWindowController.getInstance().resetBounds(this, currentMode, preferredWindowingMode);
+
             if (creating) {
                 // Nothing else to do if we don't have a window container yet. E.g. call from ctor.
                 return;
@@ -5404,7 +5425,7 @@ class Task extends TaskFragment {
             mInResumeTopActivity = true;
 
             if (isLeafTask()) {
-                if (isFocusableAndVisible()) {
+                if (isFocusableAndVisibleOrPinWindow()) {
                     someActivityResumed = resumeTopActivityInnerLocked(prev, options, deferPause);
                 }
             } else {
@@ -5991,7 +6012,7 @@ class Task extends TaskFragment {
         if (DEBUG_SWITCH) Slog.v(TAG_SWITCH, "moveTaskToFront: " + tr);
 
         final ActivityRecord pipCandidate = findEnterPipOnTaskSwitchCandidate(
-                getDisplayArea().getTopRootTask());
+                getDisplayArea().getNonPopUpViewTopRootTask());
 
         if (tr != this && !tr.isDescendantOf(this)) {
             // nothing to do!
@@ -6114,7 +6135,7 @@ class Task extends TaskFragment {
                 mAtmService.mChainTracker.endPartial();
                 return true;
             }
-            final Transition transition = new Transition(TRANSIT_TO_BACK, 0 /* flags */,
+            final Transition transition = new Transition(TRANSIT_TO_BACK, TRANSIT_FLAG_MOVE_TASK_TO_BACK /* flags */,
                     mTransitionController, mWmService.mSyncEngine);
             // Guarantee that this gets its own transition by queueing on SyncEngine
             mTransitionController.startCollectOrQueue(transition,
@@ -6131,7 +6152,9 @@ class Task extends TaskFragment {
                                 "taskToBack", transition);
                         mTransitionController.requestStartTransition(transition, tr,
                                 null /* remoteTransition */, null /* displayChange */);
-                        chain.collect(tr);
+                        if (!tr.getWindowConfiguration().isPopUpWindowMode()) {
+                            chain.collect(tr);
+                        }
                         moveTaskToBackInner(tr, transition);
                         mAtmService.mChainTracker.endPartial();
                     });
@@ -7582,6 +7605,15 @@ class Task extends TaskFragment {
             getSyncTransaction()
                     .remove(mDecorSurface)
                     .remove(mContainerSurface);
+        }
+    }
+
+    @Override
+    void resetSurfacePositionForAnimationLeash(SurfaceControl.Transaction t) {
+        super.resetSurfacePositionForAnimationLeash(t);
+        if (getWindowConfiguration().isPopUpWindowMode() ||
+                PopUpWindowController.getInstance().isTryExitWindowingMode()) {
+            t.setScale(mSurfaceControl, 1.0f, 1.0f);
         }
     }
 }

@@ -159,6 +159,8 @@ import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 import static com.android.server.wm.WindowManagerInternal.OnWindowRemovedListener;
 import static com.android.server.wm.WindowManagerInternal.WindowFocusChangeListener;
 
+import static org.rising.DebugConstants.DEBUG_POP_UP;
+
 import android.Manifest;
 import android.Manifest.permission;
 import android.animation.ValueAnimator;
@@ -1039,11 +1041,7 @@ public class WindowManagerService extends IWindowManager.Stub
         }
 
         void updateForceResizableTasks() {
-            ContentResolver resolver = mContext.getContentResolver();
-            final boolean forceResizable = Settings.Global.getInt(resolver,
-                    DEVELOPMENT_FORCE_RESIZABLE_ACTIVITIES, 0) != 0;
-
-            mAtmService.mForceResizableActivities = forceResizable;
+            mAtmService.mForceResizableActivities = true;
         }
 
         void updateDevelopmentOverrideDesktopExperience() {
@@ -1544,6 +1542,8 @@ public class WindowManagerService extends IWindowManager.Stub
         mContext.registerReceiverAsUser(mBroadcastReceiver, UserHandle.ALL, filter, null, null);
 
         mLatencyTracker = LatencyTracker.getInstance(context);
+
+        WindowManagerServiceExt.getInstance().init(this);
 
         mSettingsObserver = new SettingsObserver();
 
@@ -3698,9 +3698,11 @@ public class WindowManagerService extends IWindowManager.Stub
 
     @Override
     public void onUserSwitched() {
+        WindowManagerServiceExt.getInstance().onUserSwitched();
         synchronized (mGlobalLock) {
             // force a re-application of focused window sysui visibility on each display.
             mRoot.forAllDisplayPolicies(DisplayPolicy::resetSystemBarAttributes);
+            PopUpWindowController.getInstance().onUserSwitched();
         }
     }
 
@@ -4254,7 +4256,8 @@ public class WindowManagerService extends IWindowManager.Stub
                 // Otherwise, we'll update it when it's prepared.
                 final int forcedDensity = getForcedDisplayDensityForUserLocked(newUserId);
                 final int targetDensity = forcedDensity != 0
-                        ? forcedDensity : displayContent.getInitialDisplayDensity();
+                        ? forcedDensity : WindowManagerServiceExt.getInstance()
+                                .getDensityWithScale(displayContent.getInitialDisplayDensity());
                 displayContent.setForcedDensity(targetDensity, UserHandle.USER_CURRENT);
 
                 mRoot.forAllDisplays(display -> {
@@ -6125,6 +6128,8 @@ public class WindowManagerService extends IWindowManager.Stub
         mPolicy.systemReady();
         mRoot.forAllDisplayPolicies(DisplayPolicy::systemReady);
         mSnapshotController.systemReady();
+        PopUpWindowController.getInstance().init(mContext, this);
+        PopUpWindowController.getInstance().systemReady();
         mAppCompatCameraPolicy.start();
         UiThread.getHandler().post(mSettingsObserver::loadSettings);
         IVrManager vrManager = IVrManager.Stub.asInterface(
@@ -6146,6 +6151,8 @@ public class WindowManagerService extends IWindowManager.Stub
         if (mAppLockController != null) {
             mAppLockController.systemReady();
         }
+
+        WindowManagerServiceExt.getInstance().systemReady();
     }
 
 
@@ -6678,7 +6685,8 @@ public class WindowManagerService extends IWindowManager.Stub
         synchronized (mGlobalLock) {
             final DisplayContent displayContent = mRoot.getDisplayContent(displayId);
             if (displayContent != null && displayContent.hasAccess(Binder.getCallingUid())) {
-                return displayContent.getInitialDisplayDensity();
+                return WindowManagerServiceExt.getInstance()
+                        .getDensityWithScale(displayContent.getInitialDisplayDensity());
             }
 
             DisplayInfo info = mDisplayManagerInternal.getDisplayInfo(displayId);
@@ -6781,8 +6789,9 @@ public class WindowManagerService extends IWindowManager.Stub
                 // Clear forced display density
                 final DisplayContent displayContent = mRoot.getDisplayContent(displayId);
                 if (displayContent != null) {
-                    displayContent.setForcedDensity(displayContent.getInitialDisplayDensity(),
-                            callingUserId);
+                    displayContent.setForcedDensity(WindowManagerServiceExt.getInstance()
+                            .getDensityWithScale(displayContent.getInitialDisplayDensity()),
+                                    callingUserId);
                     return;
                 }
 

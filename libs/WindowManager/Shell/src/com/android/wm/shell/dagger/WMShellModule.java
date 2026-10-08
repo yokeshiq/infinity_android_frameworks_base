@@ -185,6 +185,7 @@ import com.android.wm.shell.pinnedlayer.phone.PinnedLayerController;
 import com.android.wm.shell.pinnedlayer.phone.PinnedLayerFlags;
 import com.android.wm.shell.pinnedlayer.phone.PinnedLayerHandler;
 import com.android.wm.shell.pinnedlayer.phone.PinnedLayerUiState;
+import com.android.wm.shell.popupview.PopUpViewTransitionHandler;
 import com.android.wm.shell.pip.PipTransitionController;
 import com.android.wm.shell.pip2.phone.PipDisplayTransferHandler;
 import com.android.wm.shell.pip2.phone.PipScheduler;
@@ -538,6 +539,7 @@ public abstract class WMShellModule {
     }
 
     //
+//
     // Scroll To Top
     //
 
@@ -551,7 +553,18 @@ public abstract class WMShellModule {
                 splitScreenController);
     }
 
+    //
+    // Pop-Up View
+    //
 
+    @WMSingleton
+    @Provides
+    @DynamicOverride
+    static PopUpViewTransitionHandler providePopUpViewTransitionHandler(Context context,
+            ShellInit shellInit,
+            Transitions transitions) {
+        return new PopUpViewTransitionHandler(context, shellInit, transitions);
+    }
 
     //
     // Splitscreen

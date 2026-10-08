@@ -200,6 +200,8 @@ import static com.android.server.wm.ActivityTaskManagerService.RELAUNCH_REASON_W
 import static com.android.server.wm.ActivityTaskManagerService.getInputDispatchingTimeoutMillisLocked;
 import static com.android.server.wm.ActivityTaskManagerService.isPip2ExperimentEnabled;
 import static com.android.server.wm.AppCompatSandboxingPolicy.ConfigOverrideHint;
+import static com.android.server.wm.PopUpAnimationController.ANIMATION_CROSS_OVER_EXIT_DURATION;
+import static com.android.server.wm.PopUpWindowController.MOVE_TO_BACK_NON_USER;
 import static com.android.server.wm.StartingData.AFTER_TRANSACTION_COPY_TO_CLIENT;
 import static com.android.server.wm.StartingData.AFTER_TRANSACTION_IDLE;
 import static com.android.server.wm.StartingData.AFTER_TRANSACTION_REMOVE_DIRECTLY;
@@ -2425,7 +2427,7 @@ final class ActivityRecord extends WindowToken {
     private int getStartingWindowType(boolean newTask, boolean taskSwitch, boolean processRunning,
             boolean allowTaskSnapshot, boolean activityCreated, boolean activityAllDrawn,
             TaskSnapshot snapshot) {
-        boolean isAppLockerActivity = IAxSandboxService.get().isAppLockerActivity(this.intent.getComponent());
+    boolean isAppLockerActivity = IAxSandboxService.get().isAppLockerActivity(this.intent.getComponent());
         if (IAxSandboxService.get().isAppLocked(this) || isAppLockerActivity) {
             return (isAppLockerActivity || processRunning) ? STARTING_WINDOW_TYPE_NONE : STARTING_WINDOW_TYPE_SPLASH_SCREEN;
         }
@@ -3150,6 +3152,15 @@ final class ActivityRecord extends WindowToken {
         return super.isFocusable() && canReceiveKeys();
     }
 
+    boolean isFocusableOrPopUpView() {
+        return super.isFocusable() && (canReceiveKeys() || isPopUpView());
+    }
+
+    boolean isPopUpView() {
+        return getWindowConfiguration().isPopUpWindowMode() ||
+                (getRootTask() != null && getRootTask().getWindowConfiguration().isPopUpWindowMode());
+    }
+
     boolean canReceiveKeys() {
         return getWindowConfiguration().canReceiveKeys() && !mWaitForEnteringPinnedMode;
     }
@@ -3222,6 +3233,9 @@ final class ActivityRecord extends WindowToken {
 
     /** @return whether this activity is non-resizeable but is forced to be resizable. */
     boolean canForceResizeNonResizable(int windowingMode) {
+        if (getWindowConfiguration().isPopUpWindowMode()) {
+            return false;
+        }
         if (windowingMode == WINDOWING_MODE_PINNED && info.supportsPictureInPicture()) {
             return false;
         }
@@ -3677,7 +3691,7 @@ final class ActivityRecord extends WindowToken {
             Transition newTransition = null;
             if (!chain.isCollecting()) {
                 chain.attachTransition(
-                        mTransitionController.requestCloseTransitionIfNeeded(trigger));
+                        mTransitionController.requestCloseTransitionIfNeeded(trigger, endTask || getChildCount() == 0));
                 newTransition = chain.getTransition();
             }
             if (chain.isCollecting()) {
@@ -3690,7 +3704,9 @@ final class ActivityRecord extends WindowToken {
                     displayArea.clearPreferredTopFocusableRootTask();
                 }
             }
-
+            // We are finishing the top focused activity and its task has nothing to be focused so
+            // the next focusable task should be focused.
+            
             finishActivityResults(resultCode, resultData, resultGrants);
             final boolean wasVisibleRequested = mVisibleRequested;
             if (mVisibleRequested) {
@@ -4393,9 +4409,6 @@ final class ActivityRecord extends WindowToken {
         final WindowContainer trigger = remove && task != null && task.getChildCount() == 1
                 ? task : this;
         final ActionChain chain = mAtmService.mChainTracker.startTransit("appDied");
-        if (!chain.isCollecting()) {
-            chain.attachTransition(mTransitionController.requestCloseTransitionIfNeeded(trigger));
-        }
         chain.collectClose(trigger);
         cleanUp(true /* cleanServices */, true /* setState */);
         if (remove) {
@@ -6161,7 +6174,7 @@ final class ActivityRecord extends WindowToken {
      */
     @VisibleForTesting
     boolean shouldPauseActivity(ActivityRecord activeActivity) {
-        return shouldMakeActive(activeActivity) && !isFocusable() && !isState(PAUSING, PAUSED)
+        return shouldMakeActive(activeActivity) && !isFocusableOrPopUpView() && !isState(PAUSING, PAUSED)
                 // We will only allow pausing if results is null, otherwise it will cause this
                 // activity to resume before getting result
                 && (results == null);
@@ -6184,7 +6197,7 @@ final class ActivityRecord extends WindowToken {
      * - should be focusable
      */
     private boolean shouldBeResumed(ActivityRecord activeActivity) {
-        return shouldMakeActive(activeActivity) && isFocusable()
+        return shouldMakeActive(activeActivity) && isFocusableOrPopUpView()
                 && getTaskFragment().getVisibility(activeActivity)
                         == TASK_FRAGMENT_VISIBILITY_VISIBLE
                 && canResumeByCompat();
@@ -8268,6 +8281,11 @@ final class ActivityRecord extends WindowToken {
         computeConfigByResolveHint(getResolvedOverrideConfiguration(), newParentConfig);
         aspectRatioPolicy.setLetterboxBoundsForFixedOrientationAndAspectRatio(
                 new Rect(resolvedBounds));
+
+	if (newParentConfig.windowConfiguration.isPopUpWindowMode() || isPopUpView()) {
+            getResolvedOverrideConfiguration().unset();
+            return;
+        }
     }
 
     @Override
@@ -8336,6 +8354,7 @@ final class ActivityRecord extends WindowToken {
                     // as a part of WindowOrganizerController#finishTransition().
                     // If not checked the activity might be collected for the wrong transition,
                     // such as a TRANSIT_OPEN transition requested right after TRANSIT_PIP.
+                    && !isPopUpView()
                     && !(mWaitForEnteringPinnedMode
                     && mTransitionController.inFinishingTransition(this))) {
                 mTransitionController.collect(this);
@@ -8592,6 +8611,8 @@ final class ActivityRecord extends WindowToken {
             Slog.wtf(TAG, "trying to update reported(client) config while dispatch is paused");
         }
         ProtoLog.v(WM_DEBUG_CONFIGURATION, "Ensuring correct configuration: %s", this);
+
+        PopUpWindowController.getInstance().ensureActivityConfiguration(this);
 
         final int newDisplayId = getDisplayId();
         final boolean displayChanged = mLastReportedDisplayId != newDisplayId;

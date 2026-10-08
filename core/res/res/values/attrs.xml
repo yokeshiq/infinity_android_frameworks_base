@@ -7793,6 +7793,11 @@
         <attr name="toBottom" format="fraction" />
     </declare-styleable>
 
+    <declare-styleable name="RadiusAnimation">
+        <attr name="fromRadius" format="float" />
+        <attr name="toRadius" format="float" />
+    </declare-styleable>
+
     <!-- Defines the ExtendAnimation used to extend windows during animations -->
     <declare-styleable name="ExtendAnimation">
         <!-- Defines the amount a window should be extended outward from the left at the start of

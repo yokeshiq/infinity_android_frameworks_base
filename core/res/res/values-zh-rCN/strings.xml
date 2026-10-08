@@ -2705,9 +2705,11 @@
     <string name="fingerprint_frr_notification_msg" msgid="2162966846624639252">"点按即可查看提升解锁体验的小贴士"</string>
     <string name="no_blink_accessibility_text_cursor_blink_label" msgid="223072797385428874">"不闪烁"</string>
     <string name="long_press_power_to_turn_off_tv_toast" msgid="2231397748028498986">"长按电源按钮即可将电视关机"</string>
+<!-- Supervision strings -->
     <string name="supervision_blocked_app_title" msgid="5546803865875383588">"家长进行的更新"</string>
     <string name="supervision_blocked_app_content" msgid="4125452996088641559">"“<xliff:g id="APP_NAME">%1$s</xliff:g>”现已移除"</string>
     <string name="supervision_unblocked_app_content" msgid="8282985265957852278">"“<xliff:g id="APP_NAME">%1$s</xliff:g>”现已可用"</string>
+
     <string name="media_route_chooser_share_cast_others" msgid="8797886650999355673">"投放到其他设备"</string>
     <string name="activity_embedding_divider_drag_handle_description" msgid="4922243158119077780">"可拖动分隔线"</string>
     <string name="brightness_unable_adjust_msg" msgid="739363986705194491">"亮度当前由顶层应用控制，无法调整"</string>
@@ -2718,4 +2720,8 @@
     <string name="do_not_disturb_sync_notification_channel_name" msgid="8652220979613037381">"同步“勿扰设置”"</string>
     <string name="do_not_disturb_sync_notification_title" msgid="6732475150089465528">"勿扰"</string>
     <string name="do_not_disturb_sync_notification_content" msgid="2755604717509797896">"已同步附近设备的勿扰设置"</string>
+
+    <!-- Pop-Up View -->
+    <string name="pinned_window_dismiss_text">"松手关闭"</string>
+    <string name="recent_task_option_pop_up">"小窗"</string>
 </resources>

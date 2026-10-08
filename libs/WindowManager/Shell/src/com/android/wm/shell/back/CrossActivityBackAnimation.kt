@@ -206,7 +206,7 @@ abstract class CrossActivityBackAnimation(
         // Offset start rectangle to align task bounds.
         backAnimRect.offsetTo(0, 0)
 
-        val isGestureNav =
+val isGestureNav =
             context.resources.getInteger(
                 com.android.internal.R.integer.config_navBarInteractionMode
             ) == NAV_BAR_MODE_GESTURAL
@@ -236,6 +236,11 @@ abstract class CrossActivityBackAnimation(
                             .toFloat()
                     else -> ScreenDecorationsUtils.getWindowCornerRadius(context)
                 }
+        }
+
+        if (enteringTarget?.windowConfiguration?.isPopUpWindowMode() == true ||
+                closingTarget?.windowConfiguration?.isPopUpWindowMode() == true) {
+            return
         }
 
         preparePreCommitClosingRectMovement(backMotionEvent.swipeEdge)

@@ -63,6 +63,7 @@ import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_WITH_CLAS
 import static com.android.server.wm.ActivityTaskManagerService.RELAUNCH_REASON_NONE;
 import static com.android.server.wm.ActivityTaskManagerService.TAG_SWITCH;
 import static com.android.server.wm.ActivityTaskManagerService.enforceNotIsolatedCaller;
+import static com.android.server.wm.PopUpWindowController.MOVE_TO_BACK_NON_USER;
 import static com.android.window.flags.Flags.allowDisableActivityRecordInputSink;
 import static com.android.window.flags.Flags.alwaysMoveTaskToBackOnBackPressedFeatureFlag;
 
@@ -411,7 +412,6 @@ class ActivityClientController extends IActivityClientController.Stub {
      */
     @Override
     public boolean moveActivityTaskToBack(IBinder token, boolean nonRoot) {
-        enforceNotIsolatedCaller("moveActivityTaskToBack");
         final long origId = Binder.clearCallingIdentity();
         try {
             synchronized (mGlobalLock) {
@@ -420,6 +420,10 @@ class ActivityClientController extends IActivityClientController.Stub {
                 if (task == null) {
                     // Not root activity.
                     return false;
+                }
+                if (task.getWindowConfiguration().isPopUpWindowMode()) {
+                    PopUpWindowController.getInstance().moveActivityTaskToBack(task, MOVE_TO_BACK_NON_USER);
+                    return true;
                 }
                 final ActivityRecord r = ActivityRecord.isInRootTaskLocked(token);
                 if (r != null && mService.mWindowOrganizerController.mTaskOrganizerController

@@ -1183,9 +1183,9 @@
     <!-- Default height of taskbar for Launcher.   -->
     <dimen name="taskbar_stashed_size">24dp</dimen>
 
-    <!-- App Lock -->
+<!-- App Lock -->
     <dimen name="app_lock_button_padding">10dp</dimen>
-     <!-- Max Width of App Lock dialog -->
+    <!-- Max Width of App Lock dialog -->
     <dimen name="app_lock_dialog_max_width">640dp</dimen>
     <dimen name="app_lock_edu_button_min_height">48dp</dimen>
     <!-- A large value to prevent the education dialog from collapsing. -->
@@ -1210,4 +1210,19 @@
     <dimen name="app_lock_permission_review_app_list_expanded_height">320dp</dimen>
     <dimen name="app_lock_pill_radius">100dp</dimen>
     <dimen name="app_lock_top_margin">24sp</dimen>
+
+    <!-- Blur radius used by SystemUI -->
+    <dimen name="min_window_blur_radius">1px</dimen>
+    <dimen name="max_window_blur_radius">17.5dp</dimen>
+
+    <!-- Pop-Up View -->
+    <dimen name="mini_window_bar_width">114dp</dimen>
+    <dimen name="mini_window_bar_height">4.8dp</dimen>
+    <dimen name="mini_window_bar_radius">2.4dp</dimen>
+    <dimen name="mini_window_bar_margin">16dp</dimen>
+    <dimen name="mini_window_corner_radius">28dp</dimen>
+    <dimen name="pinned_window_corner_radius">28dp</dimen>
+    <dimen name="pinned_window_dismiss_gradient_bg_height">80dp</dimen>
+    <dimen name="pinned_window_menu_corner_radius_large">8dp</dimen>
+    <dimen name="pinned_window_menu_corner_radius_small">8dp</dimen>
 </resources>
