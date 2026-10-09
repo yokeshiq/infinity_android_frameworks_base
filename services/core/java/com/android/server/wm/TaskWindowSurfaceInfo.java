@@ -344,6 +344,17 @@ class TaskWindowSurfaceInfo {
                     Slog.d(TAG, "cancel PopUpViewAnimation when exit PopupView. mTask=" + mTask);
                 }
             }
+
+            // 核心修复：手势退出小窗时，无条件彻底清空 Surface 图层的裁剪、坐标与圆角
+            final SurfaceControl.Transaction syncT = mTask.getSyncTransaction();
+            resetSurfaceProperties(syncT);
+            final SurfaceControl.Transaction pendingT = mTask.getPendingTransaction();
+            resetSurfaceProperties(pendingT);
+            mTask.resetSurfaceControlTransforms();
+            mWasInPopUp = false;
+
+            // 同步销毁 DimmerWindow 遮罩
+            DimmerWindow.getInstance().setTask(null);
         }
         if (isMiniWindow) {
             resetDraggingState();
