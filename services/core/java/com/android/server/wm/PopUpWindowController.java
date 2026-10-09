@@ -478,21 +478,31 @@ public class PopUpWindowController {
                         rootTask.setWindowingMode(WINDOWING_MODE_UNDEFINED);
                         rootTask.setBounds(null);
                         rootTask.mWindowContainerExt.setFreezerSkipAnim(false);
+
+                        // 1. 取消正在运行的动画并清理免动画标记
+                        final TaskWindowSurfaceInfo info = rootTask.mWindowContainerExt.getTaskWindowSurfaceInfo();
+                        if (info != null) {
+                            info.cancelPopUpViewAnimation();
+                            info.resetSurfaceProperties(rootTask.getSyncTransaction());
+                        }
                         if (skipAnim) {
                             rootTask.mTaskSupervisor.mNoAnimActivities.clear();
-                            final TaskWindowSurfaceInfo info = rootTask.mWindowContainerExt.getTaskWindowSurfaceInfo();
-                            if (info != null) {
-                                info.cancelPopUpViewAnimation();
-                            }
-                            rootTask.resetSurfaceControlTransforms();
                         }
+
+                        // 2. 彻底重置原生 Surface 变换
+                        rootTask.resetSurfaceControlTransforms();
+
+                        // 3. 清理任务记录
                         if (removeMini && wasMiniWindow) {
                             TopActivityRecorder.getInstance().removeMiniWindowTask(task);
                         }
                         if (removePin && !wasMiniWindow) {
                             TopActivityRecorder.getInstance().clearPinnedWindow();
-                            DimmerWindow.getInstance().setTask(null);
                         }
+
+                        // 4. 彻底解绑并销毁 DimmerWindow（无论 Mini 还是 Pin）
+                        DimmerWindow.getInstance().setTask(null);
+
                         if (!skipAnim) {
                             rootTask.mWindowContainerExt.scheduleTransition();
                         }
