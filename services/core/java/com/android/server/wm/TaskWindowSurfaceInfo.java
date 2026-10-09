@@ -78,6 +78,7 @@ class TaskWindowSurfaceInfo {
     private Point mOriginalCenterPositionBeforeDock = new Point();
     private float mOriginalCornerRadiusBeforeDock = 0f;
 
+    private boolean mWasInPopUp = false;
     private int mLastSurfaceX = Integer.MIN_VALUE;
     private int mLastSurfaceY = Integer.MIN_VALUE;
     private float mLastSurfaceScale = -1.0f;
@@ -537,6 +538,8 @@ class TaskWindowSurfaceInfo {
                 mTask.mTransitionController.isPlaying();
         if (winConfig.isPopUpWindowMode() && !hasAnimationLeash &&
                 !isWindowPositioningLocked() && !mIsDragging && !isPinned) {
+            mWasInPopUp = true; // 记录处于小窗几何变换中
+
             final Rect displayBound = new Rect();
             if (mTask.mDisplayContent != null) {
                 mTask.mDisplayContent.getBounds(displayBound);
@@ -556,7 +559,13 @@ class TaskWindowSurfaceInfo {
                 t.setAlpha(mTask.mSurfaceControl, NORMAL_ALPHA);
             }
             t.show(mTask.mSurfaceControl);
+        } else if (mWasInPopUp && !winConfig.isPopUpWindowMode()) {
+            // 核心修复：退出小窗时自动复位
+            mWasInPopUp = false;
+            resetSurfaceProperties(t);
         }
+
+        // 必须保留原有贴边挂起窗口的图层更新逻辑
         if (isPinned && !hasAnimationLeash && !isWindowPositioningLocked() && !mIsDragging
                 && mTask.mSurfaceControl != null && mTask.mSurfaceControl.isValid()) {
             final Rect surfaceBounds = getTaskWindowSurfaceBounds();
@@ -575,6 +584,18 @@ class TaskWindowSurfaceInfo {
                 mLastSurfaceY = surfaceBounds.top;
                 mLastSurfaceScale = mWindowSurfaceScale;
             }
+        }
+    }
+
+    /**
+     * 清空小窗残留的 WindowCrop、Position、Scale 与 CornerRadius
+     */
+    void resetSurfaceProperties(SurfaceControl.Transaction t) {
+        if (mTask.mSurfaceControl != null && mTask.mSurfaceControl.isValid()) {
+            t.setPosition(mTask.mSurfaceControl, 0, 0)
+             .setWindowCrop(mTask.mSurfaceControl, null) // 彻底清除 1440 裁剪限制
+             .setCornerRadius(mTask.mSurfaceControl, 0)
+             .setScale(mTask.mSurfaceControl, 1.0f, 1.0f);
         }
     }
 
