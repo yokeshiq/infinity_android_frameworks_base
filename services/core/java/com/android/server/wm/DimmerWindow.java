@@ -122,14 +122,7 @@ class DimmerWindow {
                         Slog.d(TAG, "onSingleTapUp: event=" + event);
                     }
                     if (!getEdgeBarBounds().contains(event.getX(), event.getY())) {
-                        switch (PopUpSettingsConfig.getInstance().getSingleTapAction()) {
-                            case TAP_ACTION_PIN_WINDOW:
-                                enterPinnedWindowingMode();
-                                break;
-                            case TAP_ACTION_EXIT:
-                                moveActivityTaskToBack();
-                                break;
-                        }
+                        enterPinnedWindowingMode();
                     }
                     return true;
                 }
@@ -143,14 +136,7 @@ class DimmerWindow {
                         Slog.d(TAG, "onSingleTapConfirmed: event=" + event);
                     }
                     if (!getEdgeBarBounds().contains(event.getX(), event.getY())) {
-                        switch (PopUpSettingsConfig.getInstance().getSingleTapAction()) {
-                            case TAP_ACTION_PIN_WINDOW:
-                                enterPinnedWindowingMode();
-                                break;
-                            case TAP_ACTION_EXIT:
-                                moveActivityTaskToBack();
-                                break;
-                        }
+                        enterPinnedWindowingMode();
                     }
                     return true;
                 }
