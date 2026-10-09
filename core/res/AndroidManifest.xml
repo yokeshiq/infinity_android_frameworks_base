@@ -29,7 +29,8 @@
     <protected-broadcast android:name="android.intent.action.SCREEN_OFF" />
     <protected-broadcast android:name="android.intent.action.SCREEN_ON" />
     <protected-broadcast android:name="android.intent.action.USER_PRESENT" />
-    <protected-broadcast android:name="org.rising.intent.START_MINI_WINDOW" />
+   <!-- 解除 protected-broadcast 限制，允许 Launcher3 (uid 10304) 发送此广播启动小窗 -->
+<!-- <protected-broadcast android:name="org.rising.intent.START_MINI_WINDOW" /> -->
     <protected-broadcast android:name="android.intent.action.DISPLAY_STATE_CHANGED" />
     <protected-broadcast android:name="android.intent.action.TIME_SET" />
     <protected-broadcast android:name="android.intent.action.TIME_TICK" />
