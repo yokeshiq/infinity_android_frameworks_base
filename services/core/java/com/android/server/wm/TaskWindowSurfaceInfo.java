@@ -332,20 +332,27 @@ class TaskWindowSurfaceInfo {
         }
         if (!isPopUpWindow && isPrevPopUpWindow) {
             resetDraggingState();
-            if (mIsDockedToEdge) {
+        if (mIsDockedToEdge) {
                 mIsDockedToEdge = false;
             }
             final IWindow window = getIWindow();
-            if (window != null) {
+        if (window != null) {
                 finishTaskPositioning(window);
             }
-            if (cancelPopUpViewAnimation()) {
+        if (cancelPopUpViewAnimation()) {
                 if (DEBUG_POP_UP) {
                     Slog.d(TAG, "cancel PopUpViewAnimation when exit PopupView. mTask=" + mTask);
                 }
             }
 
-            // 核心修复：手势退出小窗时，无条件彻底清空 Surface 图层的裁剪、坐标与圆角
+            // 【核心关键修复】：彻底清空 Task 自身的小窗边界约束，恢复铺满整个屏幕
+            final Task rootTask = mTask.getRootTask();
+        if (rootTask != null) {
+                rootTask.setBounds(null);
+            }
+            mTask.setBounds(null);
+
+            // 彻底清空 Surface 图层的裁剪、坐标与圆角
             final SurfaceControl.Transaction syncT = mTask.getSyncTransaction();
             resetSurfaceProperties(syncT);
             final SurfaceControl.Transaction pendingT = mTask.getPendingTransaction();
