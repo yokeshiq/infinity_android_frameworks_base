@@ -88,6 +88,11 @@ class PopUpViewTransitionAnimationAdapter {
 
     void onAnimationEnd(SurfaceControl.Transaction t) {
         onAnimationUpdate(t, mAnimation.getDuration());
+        if (mLeash != null && mLeash.isValid()) {
+            if (mChange.mPopUpView != null && mChange.mPopUpView.mEndScale >= 1.0f) {
+                t.setWindowCrop(mLeash, null);
+            }
+        }
     }
 
     long getDurationHint() {
