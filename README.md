@@ -128,7 +128,7 @@ mma LMOFreeform -j$(nproc)
 
 ```bash
 source build/envsetup.sh
-lunch infinity_munch-userdebug
+lunch infinity_设备代号-userdebug
 m bacon -j$(nproc)
 ```
 
