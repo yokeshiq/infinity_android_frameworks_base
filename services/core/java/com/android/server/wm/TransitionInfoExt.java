@@ -76,9 +76,21 @@ public class TransitionInfoExt {
         mPopUpViewInfo.mStartCornerRadius = getCornerRadiusFromInfo(freezeInfo);
         mPopUpViewInfo.mEndCornerRadius = getCornerRadiusFromInfo(info);
         mPopUpViewInfo.mAppBounds.set(0, 0, displayInfo.appWidth, displayInfo.appHeight);
-        if (info.mTask != null) {
-            info.mTask.getBounds(mPopUpViewInfo.mWindowCrop);
 
+        // 核心修复：退出小窗进入全屏时，将裁剪尺寸设置为完整屏幕物理尺寸，避免横屏截断
+        final int targetWindowingMode = info != null ? (info.mFreezedWindowingMode != 0 ? info.mFreezedWindowingMode
+                : (info.mTask != null ? info.mTask.getConfiguration().windowConfiguration.getWindowingMode() : 0)) : 0;
+        final boolean isTargetPopUp = WindowConfiguration.isPopUpWindowMode(targetWindowingMode);
+
+        if (isTargetPopUp && info.mTask != null) {
+            info.mTask.getBounds(mPopUpViewInfo.mWindowCrop);
+        } else {
+            final int width = displayInfo.logicalWidth > 0 ? displayInfo.logicalWidth : displayInfo.appWidth;
+            final int height = displayInfo.logicalHeight > 0 ? displayInfo.logicalHeight : displayInfo.appHeight;
+            mPopUpViewInfo.mWindowCrop.set(0, 0, width, height);
+        }
+
+        if (info != null && info.mTask != null) {
             try {
                 java.lang.reflect.Field freezerField = info.mTask.getClass().getDeclaredField("mSurfaceFreezer");
                 freezerField.setAccessible(true);
