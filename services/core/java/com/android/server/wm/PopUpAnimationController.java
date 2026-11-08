@@ -740,14 +740,23 @@ class PopUpAnimationController {
     }
 
     private void doWindowTransition(int x, int y, float scale, int boundWidth, int boundHeight) {
+        if (mTask == null || boundWidth <= 0 || boundHeight <= 0) {
+            return;
+        }
         final SurfaceControl leash = mTask.mSurfaceControl;
         if (leash != null && leash.isValid()) {
             final float cornerRadius = mTask.mWindowContainerExt.getTaskWindowSurfaceInfo().getCornerRadius();
-            mTask.getSyncTransaction().setPosition(leash, x, y)
-                    .setWindowCrop(leash, boundWidth, boundHeight)
-                    .setScale(leash, scale, scale)
-                    .setCornerRadius(leash, cornerRadius)
-                    .show(leash).apply();
+            final SurfaceControl.Transaction t = mService.mTransactionFactory.get();
+            try {
+                t.setPosition(leash, x, y)
+                        .setWindowCrop(leash, boundWidth, boundHeight)
+                        .setScale(leash, scale, scale)
+                        .setCornerRadius(leash, cornerRadius)
+                        .show(leash)
+                        .apply();
+            } finally {
+                t.close();
+            }
         }
     }
 
