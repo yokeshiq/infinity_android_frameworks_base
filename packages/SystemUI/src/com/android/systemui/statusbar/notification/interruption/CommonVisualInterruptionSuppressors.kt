@@ -118,11 +118,20 @@ class PeekDisabledSuppressor(
 
 class PeekAxDynamicBarSuppressor(
     private val settings: AxDynamicBarSettings,
-) : VisualInterruptionCondition(
+) : VisualInterruptionFilter(
     types = setOf(PEEK),
     reason = "suppressed by AxDynamicBar"
 ) {
-    override fun shouldSuppress(): Boolean = settings.isNotificationEventsActive()
+    override fun shouldSuppress(entry: NotificationEntry): Boolean {
+        if (settings.isNotificationEventsActive()) return true
+        val ctx = android.app.ActivityThread.currentApplication() ?: return false
+        val cr = ctx.contentResolver
+        if (android.provider.Settings.Global.getInt(cr, "aura_island_on", 1) == 0) return false
+        if (android.provider.Settings.Global.getInt(cr, "aura_island_notif", 1) == 0) return false
+        val raw = android.provider.Settings.Global.getString(cr, "aura_island_notif_apps") ?: return false
+        val pkg = entry.sbn.packageName ?: return false
+        return raw.split(",").any { it.trim() == pkg }
+    }
 }
 
 class PulseDisabledSuppressor(

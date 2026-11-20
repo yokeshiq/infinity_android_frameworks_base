@@ -1577,4 +1577,37 @@ final class RemoteInputConnectionImpl extends IRemoteInputConnection.Stub {
     private static boolean useImeTracing() {
         return ImeTracing.getInstance().isEnabled();
     }
+    @Dispatching(cancellable = true)
+    @Override
+    public void commitSmsVerificationCode(String code,
+            com.android.internal.infra.AndroidFuture future) {
+        if (android.os.Binder.getCallingUid() != android.os.Process.SYSTEM_UID
+                || code == null || !code.matches("[0-9]{4,8}")) {
+            future.complete(false);
+            return;
+        }
+        final InputConnectionCommandHeader header =
+                new InputConnectionCommandHeader(mCurrentSessionId.get());
+        dispatchWithTracing("commitSmsVerificationCode", () -> {
+            final View view = mServedView.get();
+            final InputConnection ic = getInputConnection();
+            if (!checkSessionId(header) || ic == null || mDeactivateRequested.get()
+                    || view == null || !view.isFocused() || !view.hasWindowFocus()) {
+                future.complete(false);
+                return;
+            }
+            boolean filled = false;
+            try {
+                ic.beginBatchEdit();
+                ic.finishComposingText();
+                ic.performContextMenuAction(android.R.id.selectAll);
+                filled = ic.commitText(code, 1);
+            } catch (RuntimeException ignored) {
+            } finally {
+                try { ic.endBatchEdit(); } catch (RuntimeException ignored) { }
+                future.complete(filled);
+            }
+        });
+    }
+
 }

@@ -478,11 +478,14 @@ public class SettingsProvider extends ContentProvider {
         final int callingUid = Binder.getCallingUid();
         if (callingUid >= Process.FIRST_APPLICATION_UID && name != null) {
             if (name.startsWith("lineage_") || name.startsWith("trust_") || name.startsWith("cm_")
-                    || name.startsWith("lineageos.") || name.startsWith("org.lineageos.")) {
+                    || name.startsWith("lineageos.") || name.startsWith("org.lineageos.")
+                    || name.startsWith("infinity_") || name.startsWith("uwu_app_background_")) {
                 String callingPkg = getCallingPackage();
                 boolean isWhitelisted = "com.android.systemui".equals(callingPkg)
                         || "com.android.launcher3".equals(callingPkg)
                         || "com.android.settings".equals(callingPkg)
+                        || "org.uwuaosp.settingsext".equals(callingPkg)
+                        || "com.infinity.suite".equals(callingPkg)
                         || "com.android.shell".equals(callingPkg)
                         || (callingPkg != null && (callingPkg.startsWith("org.lineageos.")
                                 || callingPkg.startsWith("com.android.launcher")));

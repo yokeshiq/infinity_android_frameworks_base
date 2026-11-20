@@ -309,4 +309,8 @@ interface IInputMethodManager {
             + "permission.INTERACT_ACROSS_USERS_FULL, android.Manifest.permission.TEST_INPUT_METHOD"
             + ", android.Manifest.permission.WRITE_SECURE_SETTINGS})")
     boolean disableInputMethodForTesting(String imeId, int userId);
+    /** @hide Aura-only numeric SMS code submission to the currently focused editor. */
+    @EnforcePermission("FILL_SMS_VERIFICATION_CODE")
+    boolean fillSmsVerificationCode(String code);
+
 }

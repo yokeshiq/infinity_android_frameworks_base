@@ -2179,6 +2179,7 @@ public final class NotificationPanelViewController implements
         mHeadsUpManager.onExpandingFinished();
         mConversationNotificationManager.onNotificationPanelExpandStateChanged(isFullyCollapsed());
         mIsExpandingOrCollapsing = false;
+        auraNotifyShadeState(!isFullyCollapsed()); // Aura: 落定后按是否完全收起同步
         mMediaHierarchyManager.setCollapsingShadeFromQS(false);
         mMediaHierarchyManager.setQsExpanded(mQsController.getExpanded());
         if (isFullyCollapsed()) {
@@ -2462,6 +2463,7 @@ public final class NotificationPanelViewController implements
             mOpenCloseListener.onClosingFinished();
         }
         setClosingWithAlphaFadeout(false);
+        auraNotifyShadeState(false); // Aura: 面板完全关闭 -> 恢复灵动岛
         if (!MediaControlsInComposeFlag.isEnabled()) {
             mMediaHierarchyManager.closeGuts();
         }
@@ -2992,11 +2994,23 @@ public final class NotificationPanelViewController implements
     }
 
     @VisibleForTesting
+    /** Aura: 把状态栏面板展开/收起状态广播给灵动岛（灵动岛据此隐藏自己）。 */
+    private void auraNotifyShadeState(boolean open) {
+        try {
+            final android.content.Intent i =
+                    new android.content.Intent("com.aura.island.SHADE_STATE");
+            i.putExtra("open", open);
+            mView.getContext().sendBroadcast(i);
+        } catch (Throwable ignored) {
+        }
+    }
+
     void notifyExpandingStarted() {
         if (!mExpanding) {
             DejankUtils.notifyRendererOfExpensiveFrame(mView, "notifyExpandingStarted");
             mExpanding = true;
             mIsExpandingOrCollapsing = true;
+            auraNotifyShadeState(true); // Aura: 面板开始展开 -> 通知灵动岛隐藏
             mQsController.onExpandingStarted(mQsController.getFullyExpanded());
             boostInteraction(700, "notifyExpandingStarted");
         }

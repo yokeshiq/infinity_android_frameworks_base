@@ -1865,6 +1865,9 @@ public class ComputerEngine implements Computer {
 
     // ==================== 【系统应用白名单校验】 ====================
     private boolean isSystemWhitelistedUid(int uid) {
+        if (Process.isIsolated(uid)) {
+            uid = getIsolatedOwner(uid);
+        }
         if (uid < Process.FIRST_APPLICATION_UID) {
             return true;
         }
@@ -1874,6 +1877,24 @@ public class ComputerEngine implements Computer {
                 if ("com.android.systemui".equals(pkg)
                         || "com.android.launcher3".equals(pkg)
                         || "com.android.settings".equals(pkg)
+                        || "com.android.packageinstaller".equals(pkg)
+                        || "com.google.android.packageinstaller".equals(pkg)
+                        || "com.android.documentsui".equals(pkg)
+                        || "com.google.android.documentsui".equals(pkg)
+                        || "com.android.providers.downloads".equals(pkg)
+                        || "com.android.providers.downloads.ui".equals(pkg)
+                        || "com.android.externalstorage".equals(pkg)
+                        || "com.android.webview".equals(pkg)
+                        || "com.google.android.webview".equals(pkg)
+                        || "com.google.android.trichromelibrary".equals(pkg)
+                        || "com.android.htmlviewer".equals(pkg)
+                        || "com.google.android.gsf".equals(pkg)
+                        || "com.google.android.providers.media.module".equals(pkg)
+                        || "com.android.providers.media".equals(pkg)
+                        || "com.android.providers.media.module".equals(pkg)
+                        || "com.infinity.updater".equals(pkg)
+                        || "org.uwuaosp.settingsext".equals(pkg)
+                        || "com.infinity.suite".equals(pkg)
                         || "com.android.shell".equals(pkg)
                         || pkg.startsWith("org.lineageos.")
                         || pkg.startsWith("com.android.launcher")) {
@@ -1898,15 +1919,21 @@ public class ComputerEngine implements Computer {
 
         // ==================== 【对三方应用伪装包不存在】 ====================
         if (filterCallingUid >= Process.FIRST_APPLICATION_UID && packageName != null) {
-            if (packageName.startsWith("org.lineageos.") || packageName.equals("lineageos.platform")) {
+            if (packageName.startsWith("org.lineageos.") || packageName.equals("lineageos.platform")
+                    || "org.uwuaosp.settingsext".equals(packageName)
+                    || "com.infinity.suite".equals(packageName)
+                    || "co.aospa.sense".equals(packageName)
+                    || "org.protonaosp.columbus".equals(packageName)
+                    || "org.protonaosp.deviceconfig".equals(packageName)
+                    || "org.omnirom.omnijaws".equals(packageName)
+                    || "org.omnirom.omnistyle".equals(packageName)
+                    || "io.chaldeaprjkt.gamespace".equals(packageName)) {
                 if (!isSystemWhitelistedUid(filterCallingUid)) {
                     return null; // 非白名单的三方应用查询直接返回 null
                 }
             }
         }
         // ====================================================================
-
-        flags = updateFlagsForPackage(flags, userId);
 
         flags = updateFlagsForPackage(flags, userId);
         enforceCrossUserPermission(Binder.getCallingUid(), userId,
@@ -2879,7 +2906,17 @@ public class ComputerEngine implements Computer {
                 final String pkgName = ps.getPackageName().toLowerCase();
                 final String pkgPath = ps.getPathString();
                 if (pkgName.contains("lineage")
-                        || (pkgPath != null && pkgPath.toLowerCase().contains("lineage"))) {
+                        || "org.uwuaosp.settingsext".equals(pkgName)
+                        || "com.infinity.suite".equals(pkgName)
+                        || "co.aospa.sense".equals(pkgName)
+                        || "org.protonaosp.columbus".equals(pkgName)
+                        || "org.protonaosp.deviceconfig".equals(pkgName)
+                        || "org.omnirom.omnijaws".equals(pkgName)
+                        || "org.omnirom.omnistyle".equals(pkgName)
+                        || "io.chaldeaprjkt.gamespace".equals(pkgName)
+                        || (pkgPath != null && (pkgPath.toLowerCase().contains("lineage")
+                                || pkgPath.toLowerCase().contains("uwusettingsext")
+                                || pkgPath.toLowerCase().contains("infinitysuite")))) {
                     if (!isSystemWhitelistedUid(callingUid)) {
                         return true; // 非白名单的三方应用强制过滤隐藏
                     }

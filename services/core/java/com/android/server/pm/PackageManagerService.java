@@ -3021,10 +3021,32 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         mChangedPackagesTracker.updateSequenceNumber(pkgSetting.getPackageName(), userList);
     }
 
+    private boolean isLineageFeatureWhitelisted(int uid) {
+        if (uid < Process.FIRST_APPLICATION_UID) {
+            return true;
+        }
+        final String[] pkgs = snapshotComputer().getPackagesForUid(uid);
+        if (pkgs != null) {
+            for (String pkg : pkgs) {
+                if ("com.android.systemui".equals(pkg)
+                        || "com.android.launcher3".equals(pkg)
+                        || "com.android.settings".equals(pkg)
+                        || "com.android.shell".equals(pkg)
+                        || pkg.startsWith("org.lineageos.")
+                        || pkg.startsWith("com.android.launcher")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public boolean hasSystemFeature(String name, int version) {
-        // 仅对三方应用屏蔽 Lineage 特性，系统内部组件正常访问
-        if (Binder.getCallingUid() >= Process.FIRST_APPLICATION_UID && name != null) {
-            if (name.startsWith("org.lineageos.") || name.startsWith("lineageos.")) {
+        // 仅对非白名单三方应用屏蔽 Lineage 特性，放行系统组件及 org.lineageos.*（如 Aperture 相机）
+        final int callingUid = Binder.getCallingUid();
+        if (callingUid >= Process.FIRST_APPLICATION_UID && name != null) {
+            if ((name.startsWith("org.lineageos.") || name.startsWith("lineageos."))
+                    && !isLineageFeatureWhitelisted(callingUid)) {
                 return false;
             }
         }
@@ -5792,8 +5814,9 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                     FeatureInfo.GL_ES_VERSION_UNDEFINED);
             res.add(fi);
 
-            // 仅对三方应用（UID >= 10000）过滤 Lineage 特性
-            if (Binder.getCallingUid() >= Process.FIRST_APPLICATION_UID) {
+            // 仅对非白名单三方应用（UID >= 10000）过滤 Lineage 特性
+            final int callingUid = Binder.getCallingUid();
+            if (callingUid >= Process.FIRST_APPLICATION_UID && !isLineageFeatureWhitelisted(callingUid)) {
                 res.removeIf(feat -> feat.name != null &&
                         (feat.name.startsWith("org.lineageos.") || feat.name.startsWith("lineageos.")));
             }

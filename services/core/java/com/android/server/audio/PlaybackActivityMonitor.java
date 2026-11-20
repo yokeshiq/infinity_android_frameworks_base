@@ -57,10 +57,13 @@ import android.util.SparseIntArray;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.ArrayUtils;
+import com.android.server.AppBackgroundModeInternal;
+import com.android.server.LocalServices;
 import com.android.server.utils.EventLogger;
 
 import java.io.PrintWriter;
 import java.text.DateFormat;
+import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -787,6 +790,10 @@ public final class PlaybackActivityMonitor
             }
             configsSystem = new ArrayList<>(mPlayers.values());
         }
+        notifyAppBackgroundPlaybackState(configsSystem);
+        if (configsSystem.isEmpty()) {
+            return;
+        }
 
         final Iterator<PlayMonitorClient> clientIterator = mClients.iterator();
         while (clientIterator.hasNext()) {
@@ -806,6 +813,27 @@ public final class PlaybackActivityMonitor
                 }
             }
         }
+    }
+
+    private static void notifyAppBackgroundPlaybackState(
+            List<AudioPlaybackConfiguration> configs) {
+        final AppBackgroundModeInternal service =
+                LocalServices.getService(AppBackgroundModeInternal.class);
+        if (service == null) {
+            return;
+        }
+        final Set<Integer> activeUids = new HashSet<>();
+        for (AudioPlaybackConfiguration config : configs) {
+            if (config.isActive()) {
+                activeUids.add(config.getClientUid());
+            }
+        }
+        final int[] uids = new int[activeUids.size()];
+        int index = 0;
+        for (int uid : activeUids) {
+            uids[index++] = uid;
+        }
+        service.onAudioPlaybackActiveUidsChanged(uids);
     }
 
     private ArrayList<AudioPlaybackConfiguration> anonymizeForPublicConsumption(

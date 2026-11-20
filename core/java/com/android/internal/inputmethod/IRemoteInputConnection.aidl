@@ -129,4 +129,7 @@ import com.android.internal.inputmethod.InputConnectionCommandHeader;
     void cancelCancellationSignal(in IBinder token);
     void forgetCancellationSignal(in IBinder token);
 
+    // Only system_server may submit this command; existing transaction IDs are unchanged.
+    void commitSmsVerificationCode(String code, in AndroidFuture future /* T=Boolean */);
+
 }

@@ -500,6 +500,7 @@ import com.android.internal.util.NamedLock;
 import com.android.internal.util.Preconditions;
 import com.android.internal.util.function.pooled.PooledLambda;
 import com.android.server.AlarmManagerInternal;
+import com.android.server.AppBackgroundModeInternal;
 import com.android.server.BootReceiver;
 import com.android.server.DeviceIdleInternal;
 import com.android.server.DisplayThread;
@@ -744,6 +745,8 @@ public class ActivityManagerService extends IActivityManager.Stub
 
     /** Service for optimizing resource usage from background apps. */
     private CachedAppOptimizer mCachedAppOptimizer;
+    @Nullable AppBackgroundModeController mAppBackgroundModeController;
+    @Nullable AppBackgroundModeInternal mAppBackgroundModeInternal;
     OomAdjuster mOomAdjuster;
     @GuardedBy("this")
     ProcessStateController mProcessStateController;
@@ -2820,6 +2823,9 @@ public class ActivityManagerService extends IActivityManager.Stub
         if (mAppLockLocalService != null) {
             LocalServices.addService(AppLockInternal.class, mAppLockLocalService);
         }
+        mAppBackgroundModeController = new AppBackgroundModeController(this);
+        mAppBackgroundModeInternal = mAppBackgroundModeController.getLocalService();
+        LocalServices.addService(AppBackgroundModeInternal.class, mAppBackgroundModeInternal);
         LocalManagerRegistry.addManager(ActivityManagerLocal.class,
                 (ActivityManagerLocal) mInternal);
         mActivityTaskManager.onActivityManagerInternalAdded();
@@ -9708,6 +9714,10 @@ public class ActivityManagerService extends IActivityManager.Stub
             mProcessList.onSystemReady();
             mAppRestrictionController.onSystemReady();
             mMemoryLimiter.onSystemReady();
+            if (mAppBackgroundModeController != null) {
+                mAppBackgroundModeController.onSystemReady();
+            }
+            mMemoryLimiter.onSystemReady();
             mSystemReady = true;
             t.traceEnd();
         }
@@ -14376,6 +14386,10 @@ public class ActivityManagerService extends IActivityManager.Stub
 
             // Cancel pending frozen task and clean up frozen record if there is any.
             mCachedAppOptimizer.onCleanupApplicationRecordLocked(app);
+            if (mAppBackgroundModeInternal != null) {
+                mAppBackgroundModeInternal.onProcessRemoved(
+                        app.uid, pid, app.getApplicationUid());
+            }
         }
         mAppProfiler.onCleanupApplicationRecordLocked(app);
         mBroadcastQueue.onApplicationCleanupLocked(app);
@@ -18111,6 +18125,14 @@ public class ActivityManagerService extends IActivityManager.Stub
                     final WindowProcessController wpc =
                             (WindowProcessController) procsToKill.get(i);
                     final ProcessRecord pr = (ProcessRecord) wpc.mOwner;
+                    if (mAppBackgroundModeController != null
+                            && mAppBackgroundModeController.shouldIgnoreTaskRemoval(pr)) {
+                        AppBackgroundModeController.logInfo(
+                                "Ignoring task-removal kill uid=" + pr.getApplicationUid()
+                                        + " process=" + pr.processName
+                                        + " mode=managed");
+                        continue;
+                    }
                     if (ActivityManager.isProcStateBackground(pr.getSetProcState())
                             && !pr.mReceivers.isReceivingBroadcast()
                             && !pr.getHasStartedServices()) {
@@ -20383,6 +20405,11 @@ public class ActivityManagerService extends IActivityManager.Stub
                 @OomAdjust int newOomAdj) {
             if (!mCachedAppOptimizer.useFreezer()) {
                 return;
+            }
+
+            if (mAppBackgroundModeController != null
+                    && mAppBackgroundModeController.isFullMode(app)) {
+                freezePolicy = false;
             }
 
             // TODO: b/441879937 - Pass useFreezer() information to OomAdjuster and move the trace

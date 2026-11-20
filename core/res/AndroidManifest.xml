@@ -6219,6 +6219,13 @@
         android:protectionLevel="signature"
         android:permissionFlags="allowedInPrivateComputeCore" />
 
+    <!-- Allows the built-in Aura SMS capsule to submit a numeric verification code to the
+         current, unlocked IME editor on explicit user request.
+         @hide
+    -->
+    <permission android:name="android.permission.FILL_SMS_VERIFICATION_CODE"
+        android:protectionLevel="signature" />
+
     <!-- @SystemApi Allows an application to inject user events (keys, touch, trackball)
          into the event stream and deliver them to ANY window.  Without this
          permission, you can only deliver events to windows in your own process.

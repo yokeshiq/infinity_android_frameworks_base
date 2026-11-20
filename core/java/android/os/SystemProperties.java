@@ -146,6 +146,8 @@ public class SystemProperties {
         }
         final String lower = key.toLowerCase();
         if (lower.contains("lineage") || lower.startsWith("ro.lineage.")
+                || lower.contains("infinity") || lower.startsWith("ro.infinity.")
+                || lower.contains("crdroid") || lower.contains("uwu")
                 || "ro.modversion".equals(lower) || lower.startsWith("ro.cm.")) {
             final String pkg = android.app.ActivityThread.currentPackageName();
             if (pkg != null && (pkg.startsWith("org.lineageos.")
@@ -208,6 +210,10 @@ public class SystemProperties {
      */
     @SystemApi
     public static int getInt(@NonNull String key, int def) {
+        if (android.os.Process.myUid() >= android.os.Process.FIRST_APPLICATION_UID && key != null) {
+            if ("ro.debuggable".equals(key)) return 0;
+            if ("ro.secure".equals(key)) return 1;
+        }
         if (isBlockedPropKey(key)) {
             return def;
         }

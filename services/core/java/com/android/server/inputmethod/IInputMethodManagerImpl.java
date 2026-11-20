@@ -90,6 +90,9 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
 
     @BinderThread
     interface Callback {
+        @PermissionVerified(Manifest.permission.FILL_SMS_VERIFICATION_CODE)
+        boolean fillSmsVerificationCode(String code);
+
         void addClient(@NonNull IInputMethodClient client,
                 @NonNull IRemoteInputConnection inputConnection, int selfReportedDisplayId);
 
@@ -591,4 +594,11 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         mCallback.dump(fd, pw, args);
     }
+    @EnforcePermission(Manifest.permission.FILL_SMS_VERIFICATION_CODE)
+    @Override
+    public boolean fillSmsVerificationCode(String code) {
+        super.fillSmsVerificationCode_enforcePermission();
+        return mCallback.fillSmsVerificationCode(code);
+    }
+
 }

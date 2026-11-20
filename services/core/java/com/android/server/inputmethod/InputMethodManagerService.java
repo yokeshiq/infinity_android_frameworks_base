@@ -7285,4 +7285,42 @@ public final class InputMethodManagerService implements IInputMethodManagerImpl.
             return true;
         }
     }
+    @IInputMethodManagerImpl.PermissionVerified(Manifest.permission.FILL_SMS_VERIFICATION_CODE)
+    @Override
+    public boolean fillSmsVerificationCode(String code) {
+        final int uid = Binder.getCallingUid();
+        final String[] packages = mContext.getPackageManager().getPackagesForUid(uid);
+        if (packages == null || !java.util.Arrays.asList(packages).contains("com.aura.island")
+                || code == null || !code.matches("[0-9]{4,8}")) return false;
+        final int userId = mActivityManagerInternal.getCurrentUserId();
+        if (UserHandle.getUserId(uid) != userId) return false;
+        final var result = new com.android.internal.infra.AndroidFuture<Boolean>();
+        final long identity = Binder.clearCallingIdentity();
+        try {
+            final IRemoteInputConnection connection;
+            synchronized (ImfLock.class) {
+                final var data = getUserData(userId);
+                final var client = data.mCurClient;
+                if (mWindowManagerInternal.isKeyguardLocked() || client == null
+                        || data.mCurInputConnection == null || data.mCurEditorInfo == null
+                        || data.mCurEditorInfo.inputType == android.text.InputType.TYPE_NULL
+                        || data.mImeBindingState.mFocusedWindowClient != client
+                        || !isImeClientFocused(data.mImeBindingState.mFocusedWindow, client)) {
+                    return false;
+                }
+                connection = data.mCurInputConnection;
+            }
+            connection.commitSmsVerificationCode(code, result);
+            return Boolean.TRUE.equals(result.get(1500, java.util.concurrent.TimeUnit.MILLISECONDS));
+        } catch (RemoteException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            Binder.restoreCallingIdentity(identity);
+        }
+    }
+
 }

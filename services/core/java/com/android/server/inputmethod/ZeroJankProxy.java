@@ -437,4 +437,10 @@ final class ZeroJankProxy implements IInputMethodManagerImpl.Callback {
             @Nullable String[] args) {
         mInner.dump(fd, fout, args);
     }
+    @IInputMethodManagerImpl.PermissionVerified(Manifest.permission.FILL_SMS_VERIFICATION_CODE)
+    @Override
+    public boolean fillSmsVerificationCode(String code) {
+        return mInner.fillSmsVerificationCode(code);
+    }
+
 }
