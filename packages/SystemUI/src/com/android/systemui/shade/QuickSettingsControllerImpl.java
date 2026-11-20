@@ -227,6 +227,10 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     private int mDisplayRightInset = 0; // in pixels
     private int mDisplayLeftInset = 0; // in pixels
     private boolean mSplitShadeEnabled;
+    private float mSplitHorizDownX;
+    private float mSplitHorizDownY;
+    private boolean mSplitHorizSwiping;
+    private android.animation.ValueAnimator mSplitHorizAnimator;
     /**
      * The padding between the start of notifications and the qs boundary on the lockscreen.
      * On lockscreen, notifications aren't inset this extra amount, but we still want the
@@ -1850,6 +1854,10 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         if (isTrackpadThreeFingerSwipe(event)) {
             return false;
         }
+        if (mSplitHorizSwiping) {
+            handleLegacySplitHorizontalTouch(event);
+            return true;
+        }
         if (isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE) {
             if (!isFullyCollapsed) {
                 return false;
@@ -2041,6 +2049,220 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         }
     }
 
+
+    private boolean canScrollHorizontallyRecursive(View view, float x, float y, int direction) {
+        if (view == null || view.getVisibility() != View.VISIBLE) {
+            return false;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            final android.view.ViewGroup group = (android.view.ViewGroup) view;
+            final int scrollX = group.getScrollX();
+            final int scrollY = group.getScrollY();
+            for (int i = group.getChildCount() - 1; i >= 0; i--) {
+                final View child = group.getChildAt(i);
+                if (child.getVisibility() != View.VISIBLE) continue;
+                final float childX = x + scrollX - child.getLeft();
+                final float childY = y + scrollY - child.getTop();
+                if (childX >= 0 && childX < child.getWidth()
+                        && childY >= 0 && childY < child.getHeight()) {
+                    if (canScrollHorizontallyRecursive(child, childX, childY, direction)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return view.canScrollHorizontally(direction);
+    }
+
+    boolean tryInterceptLegacySplitHorizontal(MotionEvent event) {
+        if (!isQsSplitShadeEnabledLegacy() || mBarState != StatusBarState.SHADE) {
+            return false;
+        }
+        if (mShadeExpandedFraction < 0.95f || isCustomizing() || isTracking()) {
+            return false;
+        }
+        if (mSplitHorizAnimator != null && mSplitHorizAnimator.isRunning()) {
+            return true;
+        }
+        final int action = event.getActionMasked();
+        final float x = event.getX();
+        final float y = event.getY();
+        if (action == MotionEvent.ACTION_DOWN) {
+            mSplitHorizDownX = x;
+            mSplitHorizDownY = y;
+            mSplitHorizSwiping = false;
+            initVelocityTracker();
+            trackMovement(event);
+            return false;
+        }
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (mSplitHorizSwiping) {
+                return true;
+            }
+            if (shouldBackBypassQuickSettings(mSplitHorizDownX)) {
+                return false;
+            }
+            float touchSlop = event.getClassification()
+                    == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE
+                    ? mTouchSlop * mSlopMultiplier
+                    : mTouchSlop;
+            final float dx = x - mSplitHorizDownX;
+            final float dy = y - mSplitHorizDownY;
+            if (Math.abs(dx) <= touchSlop * 1.2f || Math.abs(dx) <= Math.abs(dy) * 1.35f) {
+                return false;
+            }
+            final boolean isRtl = mPanelView != null && mPanelView.isLayoutRtl();
+            final boolean currentlyQs = isExpandImmediate();
+            final boolean validDir = !currentlyQs
+                    ? (isRtl ? dx < 0 : dx > 0)   // 消息面板：往右滑 -> 控制面板
+                    : (isRtl ? dx > 0 : dx < 0);  // 控制面板：往左滑 -> 消息面板
+            if (!validDir) {
+                return false;
+            }
+            // 若在控制面板往左滑，先判断手指下方磁贴分页器是否还有下一页可滑；
+            // 已在最后一页或非分页区时直接拦截切回通知面板
+            if (currentlyQs && mQsFrame != null) {
+                int scrollDir = isRtl ? -1 : 1;
+                float localX = x - mQsFrame.getLeft();
+                float localY = y - mQsFrame.getTop();
+                if (canScrollHorizontallyRecursive(mQsFrame, localX, localY, scrollDir)) {
+                    return false;
+                }
+            }
+            mSplitHorizSwiping = true;
+            mNotificationStackScrollLayoutController.cancelLongPress();
+            return true;
+        }
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            boolean wasSwiping = mSplitHorizSwiping;
+            mSplitHorizSwiping = false;
+            return wasSwiping;
+        }
+        return false;
+    }
+
+    private boolean canStartLegacySplitHorizontalSwipe(float x, float y, float touchSlop) {
+        return false;
+    }
+
+    private void applySplitHorizontalTransitionFrame(
+            View outgoingView, View incomingView, float dirSign, float progress, float panelW) {
+        final float p = MathUtils.constrain(progress, 0f, 1f);
+        final float travelDist = panelW * 0.45f;
+        if (outgoingView != null) {
+            outgoingView.setVisibility(View.VISIBLE);
+            outgoingView.setTranslationX(dirSign * travelDist * p);
+            outgoingView.setAlpha(1f - 0.75f * p);
+            final float outScale = 1f - 0.04f * p;
+            outgoingView.setScaleX(outScale);
+            outgoingView.setScaleY(outScale);
+        }
+        if (incomingView != null) {
+            incomingView.setVisibility(View.VISIBLE);
+            incomingView.setTranslationX(-dirSign * travelDist * (1f - p));
+            incomingView.setAlpha(0.15f + 0.85f * p);
+            final float inScale = 0.96f + 0.04f * p;
+            incomingView.setScaleX(inScale);
+            incomingView.setScaleY(inScale);
+        }
+    }
+
+    private void resetSplitViewTransform(View v) {
+        if (v == null) return;
+        v.setTranslationX(0f);
+        v.setAlpha(1f);
+        v.setScaleX(1f);
+        v.setScaleY(1f);
+    }
+
+    private void applyLegacySplitPanelMode(boolean targetIsQs) {
+        setExpandImmediate(targetIsQs);
+        setExpanded(targetIsQs);
+        mNotificationStackScrollLayoutController.setShouldShowShelfOnly(targetIsQs);
+        setExpansionHeight(targetIsQs ? getMaxExpansionHeight() : getMinExpansionHeight());
+        updateQsState();
+        updateExpansion();
+    }
+
+    private void handleLegacySplitHorizontalTouch(MotionEvent event) {
+        final int action = event.getActionMasked();
+        trackMovement(event);
+        final float x = event.getX();
+        final float dx = x - mSplitHorizDownX;
+        final boolean currentlyQs = isExpandImmediate();
+        final View qsView = mQsFrame;
+        final View nsslView = mNotificationStackScrollLayoutController.getView();
+        final View outgoingView = currentlyQs ? qsView : nsslView;
+        final View incomingView = currentlyQs ? nsslView : qsView;
+        final float panelW = (mPanelView != null && mPanelView.getWidth() > 0)
+                ? mPanelView.getWidth() : 1080f;
+        final boolean isRtl = mPanelView != null && mPanelView.isLayoutRtl();
+        final boolean validDir = !currentlyQs
+                ? (isRtl ? dx < 0 : dx > 0)
+                : (isRtl ? dx > 0 : dx < 0);
+        final float dirSign = !currentlyQs ? (isRtl ? -1f : 1f) : (isRtl ? 1f : -1f);
+        final float rawProgress = validDir ? Math.min(1f, Math.abs(dx) / (panelW * 0.55f)) : 0f;
+
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (!mSwipeInProgress) {
+                setSwipeInProgress(true);
+            }
+            if (!currentlyQs && mQs != null && mQs.getView() != null
+                    && mQs.getView().getVisibility() != View.VISIBLE) {
+                mQs.getView().setVisibility(View.VISIBLE);
+            }
+            applySplitHorizontalTransitionFrame(
+                    outgoingView, incomingView, dirSign, rawProgress, panelW);
+            return;
+        }
+
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            mSplitHorizSwiping = false;
+            float vx = 0f;
+            if (mQsVelocityTracker != null) {
+                mQsVelocityTracker.computeCurrentVelocity(1000);
+                vx = mQsVelocityTracker.getXVelocity();
+            }
+            final boolean fastFling = (action == MotionEvent.ACTION_UP)
+                    && validDir && Math.abs(vx) > 850f;
+            final boolean distanceCommit = (action == MotionEvent.ACTION_UP)
+                    && validDir && Math.abs(dx) >= Math.max(mTouchSlop * 2.2f, panelW * 0.14f);
+            final boolean shouldSwitch = fastFling || distanceCommit;
+            final float targetProgress = shouldSwitch ? 1f : 0f;
+
+            if (mSplitHorizAnimator != null) {
+                mSplitHorizAnimator.cancel();
+            }
+            mSplitHorizAnimator = android.animation.ValueAnimator.ofFloat(rawProgress, targetProgress);
+            final long duration = Math.max(140L,
+                    (long) (240f * Math.abs(targetProgress - rawProgress)));
+            mSplitHorizAnimator.setDuration(duration);
+            mSplitHorizAnimator.setInterpolator(
+                    new android.view.animation.PathInterpolator(0.2f, 0.9f, 0.2f, 1.0f));
+            mSplitHorizAnimator.addUpdateListener(anim -> {
+                float p = (float) anim.getAnimatedValue();
+                applySplitHorizontalTransitionFrame(
+                        outgoingView, incomingView, dirSign, p, panelW);
+            });
+            mSplitHorizAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(android.animation.Animator animation) {
+                    mSplitHorizAnimator = null;
+                    setSwipeInProgress(false);
+                    resetSplitViewTransform(outgoingView);
+                    resetSplitViewTransform(incomingView);
+                    if (shouldSwitch) {
+                        applyLegacySplitPanelMode(!currentlyQs);
+                    } else {
+                        updateQsState();
+                        updateExpansion();
+                    }
+                }
+            });
+            mSplitHorizAnimator.start();
+        }
+    }
+
     /** intercepts touches on Qs panel area. */
     boolean onIntercept(MotionEvent event) {
         int pointerIndex = event.findPointerIndex(mTrackingPointer);
@@ -2055,6 +2277,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             case MotionEvent.ACTION_DOWN:
                 mInitialTouchY = y;
                 mInitialTouchX = x;
+                mSplitHorizDownX = x;
+                mSplitHorizDownY = y;
+                mSplitHorizSwiping = false;
                 initVelocityTracker();
                 trackMovement(event);
                 float qsExpansionFraction = computeExpansionFraction();
@@ -2102,6 +2327,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                         == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE
                         ? mTouchSlop * mSlopMultiplier
                         : mTouchSlop;
+                if (canStartLegacySplitHorizontalSwipe(x, y, touchSlop)) {
+                    mSplitHorizSwiping = true;
+                    mNotificationStackScrollLayoutController.cancelLongPress();
+                    return true;
+                }
                 if ((h > touchSlop || (h < -touchSlop && getExpanded()))
                         && Math.abs(h) > Math.abs(x - mInitialTouchX)
                         && shouldQuickSettingsIntercept(
@@ -2126,6 +2356,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
+                mSplitHorizSwiping = false;
                 trackMovement(event);
                 mShadeLog.logMotionEvent(event, "onQsIntercept: up action, QS tracking disabled");
                 setTracking(false);

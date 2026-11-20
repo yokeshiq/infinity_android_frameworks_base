@@ -4146,6 +4146,11 @@ public final class NotificationPanelViewController implements
                 return true;
             }
 
+            if (!isFullyCollapsed() && mQsController instanceof QuickSettingsControllerImpl
+                    && ((QuickSettingsControllerImpl) mQsController)
+                            .tryInterceptLegacySplitHorizontal(event)) {
+                return true;
+            }
             if (!isFullyCollapsed() && mQsController.onIntercept(event)) {
                 debugLog("onQsIntercept true");
                 mShadeLog.v("NotificationPanelViewController MotionEvent intercepted: "
