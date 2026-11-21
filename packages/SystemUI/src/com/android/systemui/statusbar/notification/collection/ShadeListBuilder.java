@@ -1597,6 +1597,13 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
                 o2.getSectionIndex());
         if (cmp != 0) return cmp;
 
+        if (com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled) {
+            // 仅在 HyperOS 分体样式下严格按到达时间升序（旧消息在上，新消息排在后面）
+            cmp = Long.compare(getPostTime(o1), getPostTime(o2));
+            if (cmp != 0) return cmp;
+            return o1.getKey().compareTo(o2.getKey());
+        }
+
         NotifComparator sectionComparator = getSectionComparator(o1, o2);
         if (sectionComparator != null) {
             cmp = sectionComparator.compare(o1, o2);
@@ -1629,6 +1636,13 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
                 ? listEntry.getRepresentativeEntry().getSbn().getNotification().getWhen()
                 // Treat bundles as oldest
                 : Integer.MIN_VALUE;
+    }
+
+    private static long getPostTime(PipelineEntry pipelineEntry) {
+        final ListEntry listEntry = pipelineEntry.asListEntry();
+        return listEntry != null
+                ? listEntry.getRepresentativeEntry().getSbn().getPostTime()
+                : Long.MAX_VALUE;
     }
 
     private final Comparator<NotificationEntry> mGroupChildrenComparator = (o1, o2) -> {

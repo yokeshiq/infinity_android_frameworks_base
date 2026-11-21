@@ -448,6 +448,12 @@ public class NotificationShadeWindowViewController implements Dumpable {
                     return logDownOrFalseResultDispatch(ev, "occlusion transition running", false);
                 }
 
+                if (mQuickSettingsController instanceof com.android.systemui.shade.QuickSettingsControllerImpl
+                        && ((com.android.systemui.shade.QuickSettingsControllerImpl) mQuickSettingsController)
+                                .handleTopLevelSplitHorizontalSwipe(ev)) {
+                    return true;
+                }
+
                 mFalsingCollector.onTouchEvent(ev);
                 mQQSGestureHandler.onTouchEvent(ev);
                 // Pass touch events to the pulsing gesture listener only if it's dozing,

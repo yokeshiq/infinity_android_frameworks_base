@@ -3120,6 +3120,19 @@ public final class NotificationPanelViewController implements
     }
 
     private void endMotionEvent(MotionEvent event, float x, float y, boolean forceCancel) {
+        if (!forceCancel
+                && event != null
+                && event.getActionMasked() == MotionEvent.ACTION_UP
+                && mQsController.getSplitShadeEnabledLegacy()
+                && mBarState == StatusBarState.SHADE
+                && mQsController.isExpandImmediate()
+                && isFullyExpanded()
+                && Math.abs(y - mDownY) < getTouchSlop(event) * 2.5f
+                && Math.abs(x - mDownX) < getTouchSlop(event) * 2.5f) {
+            mVelocityTracker.clear();
+            onTrackingStopped(false);
+            return;
+        }
         mShadeLog.logEndMotionEvent("endMotionEvent called", forceCancel, false);
         mTrackingPointer = -1;
         mStatusBarLongPressDowntime = -1L;
@@ -3502,6 +3515,11 @@ public final class NotificationPanelViewController implements
 
     /** Called when the user performs a click anywhere in the empty area of the panel. */
     private void onEmptySpaceClick(float x, float y) {
+        if (mQsController.getSplitShadeEnabledLegacy()
+                && mBarState == StatusBarState.SHADE
+                && mQsController.isExpandImmediate()) {
+            return;
+        }
         onMiddleClicked(x, y);
     }
 
@@ -4146,11 +4164,6 @@ public final class NotificationPanelViewController implements
                 return true;
             }
 
-            if (!isFullyCollapsed() && mQsController instanceof QuickSettingsControllerImpl
-                    && ((QuickSettingsControllerImpl) mQsController)
-                            .tryInterceptLegacySplitHorizontal(event)) {
-                return true;
-            }
             if (!isFullyCollapsed() && mQsController.onIntercept(event)) {
                 debugLog("onQsIntercept true");
                 mShadeLog.v("NotificationPanelViewController MotionEvent intercepted: "
@@ -4611,7 +4624,19 @@ public final class NotificationPanelViewController implements
                 case MotionEvent.ACTION_CANCEL:
                     mShadeLog.logMotionEvent(event, "onTouch: up/cancel action");
                     addMovement(event);
-                    endMotionEvent(event, x, y, false /* forceCancel */);
+                    boolean isLegacySplitQsTap = event.getActionMasked() == MotionEvent.ACTION_UP
+                            && mQsController.getSplitShadeEnabledLegacy()
+                            && mBarState == StatusBarState.SHADE
+                            && mQsController.isExpandImmediate()
+                            && isFullyExpanded()
+                            && Math.abs(y - mDownY) < getTouchSlop(event) * 1.5f
+                            && Math.abs(x - mDownX) < getTouchSlop(event) * 1.5f;
+                    if (isLegacySplitQsTap) {
+                        mVelocityTracker.clear();
+                        onTrackingStopped(true);
+                    } else {
+                        endMotionEvent(event, x, y, false /* forceCancel */);
+                    }
                     // mHeightAnimator is null, there is no remaining frame, ends instrumenting.
                     if (mHeightAnimator == null) {
                         if (event.getActionMasked() == MotionEvent.ACTION_UP) {

@@ -151,7 +151,8 @@ public class RankingCoordinator implements Coordinator {
         @Nullable
         @Override
         public NodeController getHeaderNodeController() {
-            return mSilentNodeController;
+            return com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled
+                    ? null : mSilentNodeController;
         }
 
         @Override
@@ -235,7 +236,8 @@ public class RankingCoordinator implements Coordinator {
         @Nullable
         @Override
         public NodeController getHeaderNodeController() {
-            return mSilentNodeController;
+            return com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled
+                    ? null : mSilentNodeController;
         }
 
         @Override

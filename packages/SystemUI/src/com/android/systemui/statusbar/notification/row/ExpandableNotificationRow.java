@@ -3126,6 +3126,9 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
      * @param expand whether the system wants this notification to be expanded.
      */
     public void setSystemExpanded(boolean expand) {
+        if (com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled) {
+            expand = false; // uniform card size in HyperOS split shade only
+        }
         if (expand != mIsSystemExpanded) {
             boolean wasExpanded = isExpanded();
             mIsSystemExpanded = expand;

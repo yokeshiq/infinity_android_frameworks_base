@@ -99,6 +99,10 @@ public class StackScrollAlgorithm {
         updateResources(context);
     }
 
+    public void refreshSplitShadeResources(Context context) {
+        updateResources(context);
+    }
+
     private void updateResources(Context context) {
         Resources res = context.getResources();
         mPaddingBetweenElements = res.getDimensionPixelSize(
@@ -118,6 +122,12 @@ public class StackScrollAlgorithm {
         mGapHeight = res.getDimensionPixelSize(R.dimen.notification_section_divider_height);
         mGapHeightOnLockscreen = res.getDimensionPixelSize(
                 R.dimen.notification_section_divider_height_lockscreen);
+        if (com.android.systemui.shade.QuickSettingsControllerImpl.isHyperOsSplitShadeEnabled(context)) {
+            int splitGap = (int) (8f * res.getDisplayMetrics().density);
+            mPaddingBetweenElements = splitGap;
+            mGapHeight = splitGap;
+            mGapHeightOnLockscreen = splitGap;
+        }
         mBundleGapHeight = res.getDimensionPixelSize(
                 R.dimen.bundle_divider_height);
         mBundleExpandedGapHeight = res.getDimensionPixelSize(
@@ -515,7 +525,10 @@ public class StackScrollAlgorithm {
                     getPreviousView(i, state), ambientState.getFractionToShade(),
                     ambientState.isOnKeyguard());
 
-            if (ambientState.getShelf() != null) {
+            if (ambientState.getShelf() != null
+                    && !(com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled
+                            && !ambientState.isOnKeyguard()
+                            && !ambientState.isPulseExpanding())) {
                 // TODO(b/443808383): the shelfStart calculated here does not equal to the value
                 //  calculated in updateChildState() when a notification is pulsing
                 final float shelfStart = ambientState.getStackEndHeight()

@@ -1002,6 +1002,11 @@ public class NotificationStackScrollLayout
         mAmbientState.reload(context);
         mPaddingBetweenElements = Math.max(1,
                 res.getDimensionPixelSize(R.dimen.notification_divider_height));
+        if (com.android.systemui.shade.QuickSettingsControllerImpl.isHyperOsSplitShadeEnabled(context)) {
+            int splitGap = (int) (8f * res.getDisplayMetrics().density);
+            mGapHeight = splitGap;
+            mPaddingBetweenElements = splitGap;
+        }
         mMinimumSpacingBetweenChildren = Math.max(1,
                 res.getDimensionPixelSize(R.dimen.notification_minimum_spacing_between_children));
         mMinTopOverScrollToEscape = res.getDimensionPixelSize(
@@ -1858,7 +1863,12 @@ public class NotificationStackScrollLayout
             }
             updateInterpolatedStackHeight(endHeight, fraction);
         } else {
-            if (getQsExpansionFraction() <= 0 && !shouldSkipHeightUpdate()) {
+            boolean forceHyperOsSplitHeight =
+                    com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled
+                            && !mAmbientState.isOnKeyguard()
+                            && !mShouldShowShelfOnly;
+            if ((getQsExpansionFraction() <= 0 || forceHyperOsSplitHeight)
+                    && !shouldSkipHeightUpdate()) {
                 final float endHeight = updateStackEndHeight(
                         getHeight(), getEmptyBottomMarginInternal(), getTopPadding());
                 updateInterpolatedStackHeight(endHeight, fraction);
@@ -1893,7 +1903,11 @@ public class NotificationStackScrollLayout
     private float updateStackEndHeight(float height, float bottomMargin, float topPadding) {
         SceneContainerFlag.assertInLegacyMode();
         final float stackEndHeight;
-        if (mMaxDisplayedNotifications != -1) {
+        if (com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled
+                && !mAmbientState.isOnKeyguard()
+                && !mShouldShowShelfOnly) {
+            stackEndHeight = Math.max(0f, height);
+        } else if (mMaxDisplayedNotifications != -1) {
             // The stack intrinsic height already contains the correct value when there is a limit
             // in the max number of notifications (e.g. as in keyguard).
             stackEndHeight = getIntrinsicContentHeight();
@@ -3548,6 +3562,25 @@ public class NotificationStackScrollLayout
         if (child instanceof ExpandableView) {
             onViewAddedInternal((ExpandableView) child);
         }
+    }
+
+    public void updateHyperOsSplitShadeSpacing(boolean enabled) {
+        Resources res = mContext.getResources();
+        if (enabled) {
+            int splitGap = (int) (8f * res.getDisplayMetrics().density);
+            mGapHeight = splitGap;
+            mPaddingBetweenElements = splitGap;
+        } else {
+            mGapHeight = res.getDimensionPixelSize(R.dimen.notification_section_divider_height);
+            mPaddingBetweenElements = Math.max(1,
+                    res.getDimensionPixelSize(R.dimen.notification_divider_height));
+        }
+        if (mStackScrollAlgorithm != null) {
+            mStackScrollAlgorithm.refreshSplitShadeResources(mContext);
+        }
+        updateFirstAndLastBackgroundViews();
+        requestLayout();
+        invalidate();
     }
 
     private void updateFirstAndLastBackgroundViews() {

@@ -247,12 +247,19 @@ internal constructor(
             }
         }
 
-        // The Views left in the set are no longer in the first/last position
-        oldFirstChildren.forEach { noMoreFirstChild ->
-            noMoreFirstChild.requestTopRoundness(0f, SECTION)
-        }
-        oldLastChildren.forEach { noMoreLastChild ->
-            noMoreLastChild.requestBottomRoundness(0f, SECTION)
+        if (com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled) {
+            // 仅在 HyperOS 分体样式下统一独立大圆角
+            children.forEach { child ->
+                child.requestRoundness(1f, 1f, SECTION, false)
+            }
+        } else {
+            // 其他样式保持原生首尾圆角逻辑
+            oldFirstChildren.forEach { noMoreFirstChild ->
+                noMoreFirstChild.requestTopRoundness(0f, SECTION)
+            }
+            oldLastChildren.forEach { noMoreLastChild ->
+                noMoreLastChild.requestBottomRoundness(0f, SECTION)
+            }
         }
 
         if (android.app.Flags.richOngoingImprovements() || NmContextualDisplay.isEnabled) {

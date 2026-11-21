@@ -1320,6 +1320,15 @@ public class NotificationStackScrollLayoutController implements Dumpable {
         mView.setShouldShowShelfOnly(shouldShowShelfOnly);
     }
 
+    public void clearAllNotificationsFromSplitButton() {
+        mView.clearNotifications(NotificationStackScrollLayout.ROWS_ALL, false /* closeShade */, false);
+    }
+
+    public void refreshFooter() {
+        mView.setShouldShowShelfOnly(false);
+        mView.requestLayout();
+    }
+
     public void cancelLongPress() {
         mView.cancelLongPress();
     }

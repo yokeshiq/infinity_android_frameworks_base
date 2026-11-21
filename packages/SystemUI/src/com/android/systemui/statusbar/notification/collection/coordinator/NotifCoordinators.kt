@@ -133,11 +133,17 @@ constructor(
         if (NmContextualDisplayLaunch.isEnabled) {
             mOrderedSections.add(highlightsCoordinator.highlightsSectioner) // Highlights
         }
-        mOrderedSections.add(conversationCoordinator.priorityPeopleSectioner) // Priority People
-        mOrderedSections.add(conversationCoordinator.peopleAlertingSectioner) // People Alerting
-        mOrderedSections.add(rankingCoordinator.alertingSectioner) // Alerting
-        mOrderedSections.add(rankingCoordinator.silentSectioner) // Silent
-        mOrderedSections.add(rankingCoordinator.minimizedSectioner) // Minimized
+        val isHyperOsSplit = com.android.systemui.shade.QuickSettingsControllerImpl
+            .isHyperOsSplitShadeEnabled(android.app.ActivityThread.currentApplication())
+        if (isHyperOsSplit) {
+            // HyperOS 分体样式下不拆分静音/会话/普通分区，全部落入默认分区按到达先后顺序排队
+        } else {
+            mOrderedSections.add(conversationCoordinator.priorityPeopleSectioner) // Priority People
+            mOrderedSections.add(conversationCoordinator.peopleAlertingSectioner) // People Alerting
+            mOrderedSections.add(rankingCoordinator.alertingSectioner) // Alerting
+            mOrderedSections.add(rankingCoordinator.silentSectioner) // Silent
+            mOrderedSections.add(rankingCoordinator.minimizedSectioner) // Minimized
+        }
 
         sectionStyleProvider.setMinimizedSections(setOf(rankingCoordinator.minimizedSectioner))
         sectionStyleProvider.setSilentSections(

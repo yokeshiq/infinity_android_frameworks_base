@@ -334,6 +334,34 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     private long mNotificationBoundsAnimationDuration;
 
     private int mOneFingerQuickSettingsIntercept;
+    public static volatile boolean sQsSplitShadeEnabled = false;
+
+    public static boolean isHyperOsSplitShadeEnabled(android.content.Context ctx) {
+        if (ctx == null) {
+            return sQsSplitShadeEnabled;
+        }
+        try {
+            String rawKey = QS_SPLIT_SHADE_SETTING;
+            boolean isSystem = rawKey.startsWith("system:");
+            boolean isGlobal = rawKey.startsWith("global:");
+            String cleanKey = rawKey.contains(":") ? rawKey.substring(rawKey.indexOf(':') + 1) : rawKey;
+            int val;
+            if (isSystem) {
+                val = android.provider.Settings.System.getIntForUser(
+                        ctx.getContentResolver(), cleanKey, 0, android.os.UserHandle.USER_CURRENT);
+            } else if (isGlobal) {
+                val = android.provider.Settings.Global.getInt(ctx.getContentResolver(), cleanKey, 0);
+            } else {
+                val = android.provider.Settings.System.getIntForUser(
+                        ctx.getContentResolver(), cleanKey, 0, android.os.UserHandle.USER_CURRENT);
+            }
+            sQsSplitShadeEnabled = (val != 0);
+            return sQsSplitShadeEnabled;
+        } catch (Throwable t) {
+            return sQsSplitShadeEnabled;
+        }
+    }
+
     private boolean mQsSplitShadeEnabledLegacy;
     private boolean isQsSplitShadeEnabledLegacy() {
     if (!mQsSplitShadeEnabledLegacy) {
@@ -1202,9 +1230,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         mQs.setExpanded(getExpanded());
 
         if (isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE) {
-            boolean isQsVisible = isExpandImmediate();
+            boolean isQsVisible = mLegacySplitShowingQs;
             int qsVisibility = (isQsVisible || mSwipeInProgress) ? View.VISIBLE : View.INVISIBLE;
-            int nsslVisibility = (!isQsVisible || mSwipeInProgress) ? View.VISIBLE : View.INVISIBLE;
+            int nsslVisibility = (!isQsVisible || mSwipeInProgress) ? View.VISIBLE : View.GONE;
 
             if (mQsFrame != null && mQsFrame.getVisibility() != qsVisibility) {
                 mQsFrame.setVisibility(qsVisibility);
@@ -1212,9 +1240,14 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             if (mQs.getView() != null && mQs.getView().getVisibility() != qsVisibility) {
                 mQs.getView().setVisibility(qsVisibility);
             }
-            if (mNotificationStackScrollLayoutController.getView() != null
-                    && mNotificationStackScrollLayoutController.getView().getVisibility() != nsslVisibility) {
-                mNotificationStackScrollLayoutController.getView().setVisibility(nsslVisibility);
+            if (mNotificationStackScrollLayoutController.getView() != null) {
+                View nssl = mNotificationStackScrollLayoutController.getView();
+                if (nssl.getVisibility() != nsslVisibility) {
+                    nssl.setVisibility(nsslVisibility);
+                }
+                if (!mSwipeInProgress && (mSplitHorizAnimator == null || !mSplitHorizAnimator.isRunning())) {
+                    nssl.setAlpha(isQsVisible ? 0f : 1f);
+                }
             }
         } else {
             if (mQsFrame != null && mQsFrame.getVisibility() != View.VISIBLE) {
@@ -1296,9 +1329,16 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         float shadeExpandedFraction = mBarState == KEYGUARD
                 ? getLockscreenShadeDragProgress()
                 : mShadeExpandedFraction;
-        mShadeHeaderController.setShadeExpandedFraction(shadeExpandedFraction);
-        mShadeHeaderController.setQsExpandedFraction(qsExpansionFraction);
-        mShadeHeaderController.setQsVisible(mVisible);
+        if (isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE && !mLegacySplitShowingQs) {
+            mShadeHeaderController.setShadeExpandedFraction(0f);
+            mShadeHeaderController.setQsExpandedFraction(0f);
+            mShadeHeaderController.setQsVisible(false);
+        } else {
+            mShadeHeaderController.setShadeExpandedFraction(shadeExpandedFraction);
+            mShadeHeaderController.setQsExpandedFraction(qsExpansionFraction);
+            mShadeHeaderController.setQsVisible(mVisible);
+        }
+        updateSplitNotifOverlays();
 
         // Update the light bar
         mLightBarController.setQsExpanded(mFullyExpanded);
@@ -1518,9 +1558,12 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             float currentTranslation = mQsFrame.getTranslationY();
             int clipTop = (int) (top - currentTranslation - mQsFrame.getTop());
             int clipBottom = (int) (bottom - currentTranslation - mQsFrame.getTop());
-            mVisible = qsVisible;
+            boolean effectiveQsVisible = (isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE)
+                    ? (mLegacySplitShowingQs || mSwipeInProgress)
+                    : qsVisible;
+            mVisible = effectiveQsVisible;
             ScrimUtils.get().setQsVisible(mVisible);
-            mQs.setQsVisible(qsVisible);
+            mQs.setQsVisible(effectiveQsVisible);
             if (mEnableClipping) {
                 mQs.setFancyClipping(
                         mDisplayLeftInset,
@@ -1625,7 +1668,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         float topPadding;
         boolean keyguardShowing = mBarState == KEYGUARD;
         if (isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE) {
-            return mQuickQsHeaderHeight + (10 * mResources.getDisplayMetrics().density);
+            return 136f * mResources.getDisplayMetrics().density;
         }
         if (mSplitShadeEnabled) {
             return keyguardShowing
@@ -1854,10 +1897,6 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         if (isTrackpadThreeFingerSwipe(event)) {
             return false;
         }
-        if (mSplitHorizSwiping) {
-            handleLegacySplitHorizontalTouch(event);
-            return true;
-        }
         if (isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE) {
             if (!isFullyCollapsed) {
                 return false;
@@ -1930,9 +1969,21 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             mTwoFingerExpandPossible = true;
             if (isQsSplitShadeEnabledLegacy()) {
                 boolean shouldOpenQs = isOpenQsEvent(event) && isInStatusBar;
+                mLegacySplitShowingQs = shouldOpenQs;
                 setExpandImmediate(shouldOpenQs);
+                setExpanded(false);
+                mExpansionHeight = mMinExpansionHeight;
+                mVisible = shouldOpenQs;
+                ScrimUtils.get().setQsVisible(shouldOpenQs);
+                if (mQs != null) {
+                    mQs.setQsVisible(shouldOpenQs);
+                }
                 mNotificationStackScrollLayoutController.setShouldShowShelfOnly(shouldOpenQs);
+                if (!shouldOpenQs) {
+                    mNotificationStackScrollLayoutController.refreshFooter();
+                }
                 updateQsState();
+                updateExpansion();
             }
         }
         if (!isQsSplitShadeEnabledLegacy() && mTwoFingerExpandPossible && isOpenQsEvent(event) && isInStatusBar) {
@@ -2050,109 +2101,361 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     }
 
 
-    private boolean canScrollHorizontallyRecursive(View view, float x, float y, int direction) {
-        if (view == null || view.getVisibility() != View.VISIBLE) {
-            return false;
+    private boolean mLegacySplitShowingQs = false;
+    private android.widget.LinearLayout mSplitNotifClockContainer;
+    private android.widget.FrameLayout mSplitNotifClearBtn;
+
+    private android.widget.FrameLayout mSplitNotifBottomBar;
+    private android.widget.FrameLayout mSplitNotifHistoryBtn;
+    private android.widget.FrameLayout mSplitNotifSettingsBtn;
+    private android.widget.TextView mSplitNotifClearIcon;
+    private android.widget.ImageView mSplitNotifHistoryIcon;
+    private android.widget.ImageView mSplitNotifSettingsIcon;
+    private int mSavedStackTopMargin = -1;
+
+    private android.graphics.drawable.Drawable createSplitIconDrawable(int type, int color, float density) {
+        return new android.graphics.drawable.Drawable() {
+            private final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override
+            public void draw(android.graphics.Canvas c) {
+                android.graphics.Rect b = getBounds();
+                float cx = b.exactCenterX();
+                float cy = b.exactCenterY();
+                float r = 9f * density;
+                p.setColor(color);
+                p.setStyle(android.graphics.Paint.Style.STROKE);
+                p.setStrokeWidth(2f * density);
+                p.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                p.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+
+                if (type == 0) {
+                    // 通知历史：逆时针时钟箭头
+                    android.graphics.RectF arc = new android.graphics.RectF(cx - r, cy - r, cx + r, cy + r);
+                    c.drawArc(arc, -150f, 300f, false, p);
+                    c.drawLine(cx - r, cy - 3.5f * density, cx - r, cy + 1.5f * density, p);
+                    c.drawLine(cx - r, cy + 1.5f * density, cx - r + 4.5f * density, cy + 1.5f * density, p);
+                    c.drawLine(cx, cy - 4.5f * density, cx, cy, p);
+                    c.drawLine(cx, cy, cx + 3.5f * density, cy + 2f * density, p);
+                } else {
+                    // 通知设置：铃铛轮廓
+                    android.graphics.RectF dome = new android.graphics.RectF(
+                            cx - 6.5f * density, cy - 8f * density, cx + 6.5f * density, cy + 4f * density);
+                    c.drawArc(dome, 180f, 180f, false, p);
+                    c.drawLine(cx - 6.5f * density, cy - 2f * density, cx - 8f * density, cy + 5f * density, p);
+                    c.drawLine(cx + 6.5f * density, cy - 2f * density, cx + 8f * density, cy + 5f * density, p);
+                    c.drawLine(cx - 9f * density, cy + 5f * density, cx + 9f * density, cy + 5f * density, p);
+                    android.graphics.RectF clapper = new android.graphics.RectF(
+                            cx - 2.2f * density, cy + 5.5f * density, cx + 2.2f * density, cy + 9f * density);
+                    c.drawArc(clapper, 0f, 180f, false, p);
+                }
+            }
+            @Override public void setAlpha(int alpha) { p.setAlpha(alpha); }
+            @Override public void setColorFilter(android.graphics.ColorFilter cf) { p.setColorFilter(cf); }
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        };
+    }
+
+    private void setCircleBtnBlurAlpha(android.widget.FrameLayout btn, float alpha, float density) {
+        if (btn == null) return;
+        if (btn.getBackground() instanceof com.android.internal.graphics.drawable.BackgroundBlurDrawable) {
+            com.android.internal.graphics.drawable.BackgroundBlurDrawable blur =
+                    (com.android.internal.graphics.drawable.BackgroundBlurDrawable) btn.getBackground();
+            int radius = alpha > 0.05f ? (int) (28 * density * alpha) : 0;
+            blur.setBlurRadius(radius);
+            blur.setAlpha((int) (255 * MathUtils.constrain(alpha, 0f, 1f)));
         }
-        if (view instanceof android.view.ViewGroup) {
-            final android.view.ViewGroup group = (android.view.ViewGroup) view;
-            final int scrollX = group.getScrollX();
-            final int scrollY = group.getScrollY();
-            for (int i = group.getChildCount() - 1; i >= 0; i--) {
-                final View child = group.getChildAt(i);
-                if (child.getVisibility() != View.VISIBLE) continue;
-                final float childX = x + scrollX - child.getLeft();
-                final float childY = y + scrollY - child.getTop();
-                if (childX >= 0 && childX < child.getWidth()
-                        && childY >= 0 && childY < child.getHeight()) {
-                    if (canScrollHorizontallyRecursive(child, childX, childY, direction)) {
-                        return true;
+    }
+
+    private void applyMonetStyleToCircleBtn(android.widget.FrameLayout btn, android.content.Context ctx, float density) {
+        if (btn == null) return;
+        boolean isNight = (ctx.getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        int accentBg = ctx.getColor(isNight
+                ? android.R.color.system_accent1_700
+                : android.R.color.system_accent1_200);
+        int accentIcon = ctx.getColor(isNight
+                ? android.R.color.system_accent1_100
+                : android.R.color.system_accent1_900);
+        int translucentBg = (accentBg & 0x00FFFFFF) | 0x99000000;
+        int strokeColor = (accentIcon & 0x00FFFFFF) | 0x33000000;
+
+        if (btn.getBackground() instanceof com.android.internal.graphics.drawable.BackgroundBlurDrawable) {
+            ((com.android.internal.graphics.drawable.BackgroundBlurDrawable) btn.getBackground()).setColor(translucentBg);
+        } else {
+            android.graphics.drawable.GradientDrawable fallbackBg = new android.graphics.drawable.GradientDrawable();
+            fallbackBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            fallbackBg.setColor(translucentBg);
+            fallbackBg.setStroke((int) (1 * density), strokeColor);
+            btn.setBackground(fallbackBg);
+        }
+    }
+
+    private void refreshAllSplitBottomButtonsMonet(android.content.Context ctx, float density) {
+        boolean isNight = (ctx.getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        int accentIcon = ctx.getColor(isNight
+                ? android.R.color.system_accent1_100
+                : android.R.color.system_accent1_900);
+
+        applyMonetStyleToCircleBtn(mSplitNotifClearBtn, ctx, density);
+        applyMonetStyleToCircleBtn(mSplitNotifHistoryBtn, ctx, density);
+        applyMonetStyleToCircleBtn(mSplitNotifSettingsBtn, ctx, density);
+
+        if (mSplitNotifClearIcon != null) {
+            mSplitNotifClearIcon.setTextColor(accentIcon);
+        }
+        if (mSplitNotifHistoryIcon != null) {
+            mSplitNotifHistoryIcon.setImageDrawable(createSplitIconDrawable(0, accentIcon, density));
+        }
+        if (mSplitNotifSettingsIcon != null) {
+            mSplitNotifSettingsIcon.setImageDrawable(createSplitIconDrawable(1, accentIcon, density));
+        }
+    }
+
+    private android.widget.FrameLayout buildMonetBlurCircleButton(
+            android.content.Context ctx, float density, int sizePx, View.OnClickListener clickListener) {
+        android.widget.FrameLayout btn = new android.widget.FrameLayout(ctx);
+        btn.setClickable(true);
+        btn.setFocusable(true);
+        btn.setElevation(24f * density);
+        btn.setClipToOutline(true);
+        btn.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setOval(0, 0, view.getWidth(), view.getHeight());
+            }
+        });
+        btn.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+                if (v.getViewRootImpl() != null) {
+                    try {
+                        com.android.internal.graphics.drawable.BackgroundBlurDrawable blur =
+                                v.getViewRootImpl().createBackgroundBlurDrawable();
+                        blur.setBlurRadius((int) (28 * density));
+                        blur.setCornerRadius(sizePx / 2f);
+                        v.setBackground(blur);
+                        applyMonetStyleToCircleBtn(btn, ctx, density);
+                    } catch (Throwable ignored) {
                     }
                 }
             }
-        }
-        return view.canScrollHorizontally(direction);
+            @Override public void onViewDetachedFromWindow(View v) {}
+        });
+        btn.setOnClickListener(v -> {
+            v.animate().scaleX(0.88f).scaleY(0.88f).setDuration(80)
+                    .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f).setDuration(120).start())
+                    .start();
+            clickListener.onClick(v);
+        });
+        return btn;
     }
 
-    boolean tryInterceptLegacySplitHorizontal(MotionEvent event) {
-        if (!isQsSplitShadeEnabledLegacy() || mBarState != StatusBarState.SHADE) {
-            return false;
-        }
-        if (mShadeExpandedFraction < 0.95f || isCustomizing() || isTracking()) {
-            return false;
-        }
-        if (mSplitHorizAnimator != null && mSplitHorizAnimator.isRunning()) {
-            return true;
-        }
-        final int action = event.getActionMasked();
-        final float x = event.getX();
-        final float y = event.getY();
-        if (action == MotionEvent.ACTION_DOWN) {
-            mSplitHorizDownX = x;
-            mSplitHorizDownY = y;
-            mSplitHorizSwiping = false;
-            initVelocityTracker();
-            trackMovement(event);
-            return false;
-        }
-        if (action == MotionEvent.ACTION_MOVE) {
-            if (mSplitHorizSwiping) {
-                return true;
+    private void launchSplitNotifIntent(android.content.Context ctx, String action) {
+        try {
+            android.content.Intent intent = new android.content.Intent(action);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            ctx.startActivity(intent);
+            if (mPanelViewControllerLazy != null && mPanelViewControllerLazy.get() != null) {
+                mPanelViewControllerLazy.get().collapse(false, 1.0f);
             }
-            if (shouldBackBypassQuickSettings(mSplitHorizDownX)) {
-                return false;
-            }
-            float touchSlop = event.getClassification()
-                    == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE
-                    ? mTouchSlop * mSlopMultiplier
-                    : mTouchSlop;
-            final float dx = x - mSplitHorizDownX;
-            final float dy = y - mSplitHorizDownY;
-            if (Math.abs(dx) <= touchSlop * 1.2f || Math.abs(dx) <= Math.abs(dy) * 1.35f) {
-                return false;
-            }
-            final boolean isRtl = mPanelView != null && mPanelView.isLayoutRtl();
-            final boolean currentlyQs = isExpandImmediate();
-            final boolean validDir = !currentlyQs
-                    ? (isRtl ? dx < 0 : dx > 0)   // 消息面板：往右滑 -> 控制面板
-                    : (isRtl ? dx > 0 : dx < 0);  // 控制面板：往左滑 -> 消息面板
-            if (!validDir) {
-                return false;
-            }
-            // 若在控制面板往左滑，先判断手指下方磁贴分页器是否还有下一页可滑；
-            // 已在最后一页或非分页区时直接拦截切回通知面板
-            if (currentlyQs && mQsFrame != null) {
-                int scrollDir = isRtl ? -1 : 1;
-                float localX = x - mQsFrame.getLeft();
-                float localY = y - mQsFrame.getTop();
-                if (canScrollHorizontallyRecursive(mQsFrame, localX, localY, scrollDir)) {
-                    return false;
-                }
-            }
-            mSplitHorizSwiping = true;
-            mNotificationStackScrollLayoutController.cancelLongPress();
-            return true;
+        } catch (Throwable ignored) {
         }
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            boolean wasSwiping = mSplitHorizSwiping;
-            mSplitHorizSwiping = false;
-            return wasSwiping;
-        }
-        return false;
     }
 
-    private boolean canStartLegacySplitHorizontalSwipe(float x, float y, float touchSlop) {
-        return false;
+    private void ensureSplitNotifOverlays() {
+        if (mPanelView == null) return;
+        final android.content.Context ctx = mPanelView.getContext();
+        final float density = ctx.getResources().getDisplayMetrics().density;
+        final android.view.ViewGroup host = (mPanelView.getParent() instanceof android.view.ViewGroup)
+                ? (android.view.ViewGroup) mPanelView.getParent()
+                : mPanelView;
+
+        // 1) 顶部置顶时钟 + 底部左右齐平（左侧日期 / 右侧「静音」，均距边框 24dp）
+        if (mSplitNotifClockContainer == null) {
+            android.widget.LinearLayout box = new android.widget.LinearLayout(ctx);
+            box.setOrientation(android.widget.LinearLayout.VERTICAL);
+            box.setClickable(false);
+            box.setFocusable(false);
+            box.setElevation(24f * density);
+            int sidePad = (int) (24 * density);
+            box.setPadding(sidePad, 0, sidePad, 0);
+
+            android.widget.TextClock timeClock = new android.widget.TextClock(ctx);
+            timeClock.setFormat24Hour("HH:mm");
+            timeClock.setFormat12Hour("h:mm");
+            timeClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 52f);
+            timeClock.setTextColor(0xFFFFFFFF);
+            timeClock.setIncludeFontPadding(false);
+            timeClock.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+
+            android.widget.LinearLayout subRow = new android.widget.LinearLayout(ctx);
+            subRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            subRow.setPadding((int) (2 * density), (int) (4 * density), 0, 0);
+
+            android.widget.TextClock dateClock = new android.widget.TextClock(ctx);
+            dateClock.setFormat24Hour("M月d日 EEEE");
+            dateClock.setFormat12Hour("M月d日 EEEE");
+            dateClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f);
+            dateClock.setTextColor(0xE6FFFFFF);
+
+            android.widget.TextView silentTag = new android.widget.TextView(ctx);
+            silentTag.setText("静音");
+            silentTag.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f);
+            silentTag.setTextColor(0xE6FFFFFF);
+            silentTag.setGravity(android.view.Gravity.END);
+
+            android.widget.LinearLayout.LayoutParams dateLp = new android.widget.LinearLayout.LayoutParams(
+                    0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            android.widget.LinearLayout.LayoutParams silentLp = new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            subRow.addView(dateClock, dateLp);
+            subRow.addView(silentTag, silentLp);
+
+            box.addView(timeClock);
+            box.addView(subRow, new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.Gravity.TOP);
+            lp.topMargin = (int) (42 * density);
+            box.setVisibility(View.GONE);
+            host.addView(box, lp);
+            mSplitNotifClockContainer = box;
+        }
+
+        // 2) 底部常驻三键栏：通知历史(左) + × 一键清除(中) + 通知设置(右)，三圆心严格同一水平线
+        if (mSplitNotifBottomBar == null) {
+            final int sizePx = (int) (54 * density);
+            android.widget.FrameLayout bar = new android.widget.FrameLayout(ctx);
+            bar.setElevation(24f * density);
+            bar.setClipChildren(false);
+            bar.setClipToPadding(false);
+            int sidePad = (int) (24 * density);
+            bar.setPadding(sidePad, 0, sidePad, 0);
+
+            // 左：通知历史
+            mSplitNotifHistoryBtn = buildMonetBlurCircleButton(ctx, density, sizePx,
+                    v -> launchSplitNotifIntent(ctx, "android.settings.NOTIFICATION_HISTORY"));
+            mSplitNotifHistoryIcon = new android.widget.ImageView(ctx);
+            mSplitNotifHistoryBtn.addView(mSplitNotifHistoryIcon, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            bar.addView(mSplitNotifHistoryBtn, new android.widget.FrameLayout.LayoutParams(
+                    sizePx, sizePx, android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL));
+
+            // 中：× 一键清除
+            mSplitNotifClearBtn = buildMonetBlurCircleButton(ctx, density, sizePx,
+                    v -> mNotificationStackScrollLayoutController.clearAllNotificationsFromSplitButton());
+            mSplitNotifClearIcon = new android.widget.TextView(ctx);
+            mSplitNotifClearIcon.setText("×");
+            mSplitNotifClearIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f);
+            mSplitNotifClearIcon.setGravity(android.view.Gravity.CENTER);
+            mSplitNotifClearIcon.setIncludeFontPadding(false);
+            mSplitNotifClearBtn.addView(mSplitNotifClearIcon, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            bar.addView(mSplitNotifClearBtn, new android.widget.FrameLayout.LayoutParams(
+                    sizePx, sizePx, android.view.Gravity.CENTER));
+
+            // 右：通知设置
+            mSplitNotifSettingsBtn = buildMonetBlurCircleButton(ctx, density, sizePx,
+                    v -> launchSplitNotifIntent(ctx, "android.settings.ALL_APPS_NOTIFICATION_SETTINGS"));
+            mSplitNotifSettingsIcon = new android.widget.ImageView(ctx);
+            mSplitNotifSettingsBtn.addView(mSplitNotifSettingsIcon, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            bar.addView(mSplitNotifSettingsBtn, new android.widget.FrameLayout.LayoutParams(
+                    sizePx, sizePx, android.view.Gravity.END | android.view.Gravity.CENTER_VERTICAL));
+
+            android.widget.FrameLayout.LayoutParams barLp = new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    sizePx,
+                    android.view.Gravity.BOTTOM);
+            barLp.bottomMargin = (int) (32 * density);
+            bar.setVisibility(View.GONE);
+            host.addView(bar, barLp);
+            mSplitNotifBottomBar = bar;
+            refreshAllSplitBottomButtonsMonet(ctx, density);
+        }
     }
+
+    private void hideNativeFooterView(View nsslView, boolean hide) {
+        if (!(nsslView instanceof android.view.ViewGroup)) return;
+        android.view.ViewGroup vg = (android.view.ViewGroup) nsslView;
+        for (int i = 0; i < vg.getChildCount(); i++) {
+            View child = vg.getChildAt(i);
+            if (child != null && child.getClass().getSimpleName().contains("FooterView")) {
+                child.setVisibility(hide ? View.GONE : View.VISIBLE);
+                child.setAlpha(hide ? 0f : 1f);
+            }
+        }
+    }
+
+    private void updateSplitNotifOverlays() {
+        final boolean showNotifOverlay = isQsSplitShadeEnabledLegacy()
+                && mBarState == StatusBarState.SHADE
+                && !mLegacySplitShowingQs
+                && mShadeExpandedFraction > 0.18f;
+        final float density = mPanelView != null
+                ? mPanelView.getContext().getResources().getDisplayMetrics().density : 3f;
+
+        if (showNotifOverlay) {
+            ensureSplitNotifOverlays();
+            if (mPanelView != null) {
+                refreshAllSplitBottomButtonsMonet(mPanelView.getContext(), density);
+            }
+        }
+
+        final View nsslView = mNotificationStackScrollLayoutController.getView();
+        if (nsslView != null && isQsSplitShadeEnabledLegacy()) {
+            hideNativeFooterView(nsslView, showNotifOverlay);
+        }
+
+        final float alpha = showNotifOverlay
+                ? MathUtils.constrain((mShadeExpandedFraction - 0.2f) / 0.8f, 0f, 1f)
+                : 0f;
+        setCircleBtnBlurAlpha(mSplitNotifHistoryBtn, alpha, density);
+        setCircleBtnBlurAlpha(mSplitNotifClearBtn, alpha, density);
+        setCircleBtnBlurAlpha(mSplitNotifSettingsBtn, alpha, density);
+
+        if (mSplitNotifClockContainer != null) {
+            mSplitNotifClockContainer.setVisibility(showNotifOverlay ? View.VISIBLE : View.GONE);
+            mSplitNotifClockContainer.setAlpha(alpha);
+            if (showNotifOverlay) {
+                mSplitNotifClockContainer.setElevation(36f * density);
+                mSplitNotifClockContainer.setTranslationZ(36f * density);
+                mSplitNotifClockContainer.bringToFront();
+            }
+        }
+        if (mSplitNotifBottomBar != null) {
+            mSplitNotifBottomBar.setVisibility(showNotifOverlay ? View.VISIBLE : View.GONE);
+            mSplitNotifBottomBar.setAlpha(alpha);
+            if (showNotifOverlay) {
+                mSplitNotifBottomBar.setElevation(48f * density);
+                mSplitNotifBottomBar.setTranslationZ(48f * density);
+                mSplitNotifBottomBar.bringToFront();
+            }
+        }
+    }
+
+    private boolean mSplitHorizBlockedByPager = false;
 
     private void applySplitHorizontalTransitionFrame(
             View outgoingView, View incomingView, float dirSign, float progress, float panelW) {
         final float p = MathUtils.constrain(progress, 0f, 1f);
-        final float travelDist = panelW * 0.45f;
+        final float travelDist = panelW * 0.65f;
         if (outgoingView != null) {
             outgoingView.setVisibility(View.VISIBLE);
             outgoingView.setTranslationX(dirSign * travelDist * p);
-            outgoingView.setAlpha(1f - 0.75f * p);
+            outgoingView.setAlpha(1f - 0.85f * p);
             final float outScale = 1f - 0.04f * p;
             outgoingView.setScaleX(outScale);
             outgoingView.setScaleY(outScale);
@@ -2167,53 +2470,196 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         }
     }
 
-    private void resetSplitViewTransform(View v) {
+    private void resetSplitViewTransform(View v, float targetAlpha) {
         if (v == null) return;
         v.setTranslationX(0f);
-        v.setAlpha(1f);
+        v.setAlpha(targetAlpha);
         v.setScaleX(1f);
         v.setScaleY(1f);
     }
 
-    private void applyLegacySplitPanelMode(boolean targetIsQs) {
+    private void commitLegacySplitPanelState(boolean targetIsQs) {
+        mLegacySplitShowingQs = targetIsQs;
         setExpandImmediate(targetIsQs);
+        int maxH = getMaxExpansionHeight();
+        if (maxH <= 0 && mQs != null && mQs.getView() != null) {
+            maxH = mQs.getView().getHeight();
+        }
+        if (maxH <= 0 && mPanelView != null) {
+            maxH = mPanelView.getHeight();
+        }
+        int targetHeight = targetIsQs ? maxH : getMinExpansionHeight();
+        mExpansionHeight = targetHeight;
+        mFullyExpanded = targetIsQs && targetHeight > 0;
         setExpanded(targetIsQs);
+        setQsFullScreen(false);
+        mShadeRepository.setQsExpansion(targetIsQs ? 1f : 0f);
+        if (mExpansionHeightListener != null) {
+            mExpansionHeightListener.onQsSetExpansionHeightCalled(mFullyExpanded);
+        }
         mNotificationStackScrollLayoutController.setShouldShowShelfOnly(targetIsQs);
-        setExpansionHeight(targetIsQs ? getMaxExpansionHeight() : getMinExpansionHeight());
+
+        final View nsslView = mNotificationStackScrollLayoutController.getView();
+        resetSplitViewTransform(mQsFrame, targetIsQs ? 1f : 0f);
+        resetSplitViewTransform(nsslView, targetIsQs ? 0f : 1f);
+
+        if (mQsFrame != null) {
+            mQsFrame.setClipBounds(null);
+            mQsFrame.setTranslationY(0f);
+            mQsFrame.setVisibility(targetIsQs ? View.VISIBLE : View.INVISIBLE);
+            if (targetIsQs) {
+                mQsFrame.bringToFront();
+            }
+        }
+        if (mQs != null) {
+            if (mQs.getView() != null) {
+                mQs.getView().setVisibility(targetIsQs ? View.VISIBLE : View.INVISIBLE);
+                mQs.getView().setClipBounds(null);
+            }
+            mVisible = targetIsQs;
+            ScrimUtils.get().setQsVisible(targetIsQs);
+            mQs.setQsVisible(targetIsQs);
+            mQs.setExpanded(targetIsQs);
+            setListening(targetIsQs);
+            if (targetIsQs) {
+                int w = mPanelView != null ? mPanelView.getWidth() : 0;
+                int h = mPanelView != null ? mPanelView.getHeight() : 0;
+                mQs.setFancyClipping(0, 0, w, h, 0, false, true);
+                mQs.setQsExpansion(1f, 1f, 0f, 1f);
+            }
+        }
+        if (nsslView != null) {
+            nsslView.setVisibility(targetIsQs ? View.GONE : View.VISIBLE);
+            if (!targetIsQs) {
+                mNotificationStackScrollLayoutController.refreshFooter();
+                nsslView.requestLayout();
+            }
+        }
         updateQsState();
         updateExpansion();
+        updateSplitNotifOverlays();
     }
 
-    private void handleLegacySplitHorizontalTouch(MotionEvent event) {
-        final int action = event.getActionMasked();
-        trackMovement(event);
-        final float x = event.getX();
+    public boolean handleTopLevelSplitHorizontalSwipe(MotionEvent ev) {
+        if (!isQsSplitShadeEnabledLegacy() || mBarState != StatusBarState.SHADE) {
+            mSplitHorizSwiping = false;
+            return false;
+        }
+        if (mShadeExpandedFraction < 0.95f || isCustomizing()) {
+            mSplitHorizSwiping = false;
+            return false;
+        }
+        if (mSplitHorizAnimator != null && mSplitHorizAnimator.isRunning()) {
+            return true;
+        }
+
+        final int action = ev.getActionMasked();
+        final float x = ev.getX();
+        final float y = ev.getY();
+        final float panelW = (mPanelView != null && mPanelView.getWidth() > 0)
+                ? mPanelView.getWidth() : 1080f;
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            mSplitHorizDownX = x;
+            mSplitHorizDownY = y;
+            mSplitHorizSwiping = false;
+            mSplitHorizBlockedByPager = false;
+            initVelocityTracker();
+            trackMovement(ev);
+            return false;
+        }
+
+        trackMovement(ev);
         final float dx = x - mSplitHorizDownX;
-        final boolean currentlyQs = isExpandImmediate();
+        final float dy = y - mSplitHorizDownY;
+        final boolean isRtl = mPanelView != null && mPanelView.isLayoutRtl();
+        final boolean currentlyQs = mLegacySplitShowingQs;
+
+        // 空间排布：[ 通知页 (左) ]  <--->  [ 控制面板 (右) ]
+        // 1. 当前在通知页(!currentlyQs)：往左滑(dx < 0) -> 切到控制面板
+        // 2. 当前在控制面板(currentlyQs)：往右滑(dx > 0) -> 切到通知页
+        final boolean validDir = !currentlyQs
+                ? (isRtl ? dx > 0 : dx < 0)
+                : (isRtl ? dx < 0 : dx > 0);
+        final float dirSign = !currentlyQs
+                ? (isRtl ? 1f : -1f)
+                : (isRtl ? -1f : 1f);
+
+        if (!mSplitHorizSwiping) {
+            if (action != MotionEvent.ACTION_MOVE || mSplitHorizBlockedByPager) {
+                return false;
+            }
+            final float edgeMargin = 48f;
+            if (mSplitHorizDownX < edgeMargin || mSplitHorizDownX > panelW - edgeMargin) {
+                mSplitHorizBlockedByPager = true;
+                return false;
+            }
+            float slop = mTouchSlop > 0 ? mTouchSlop : 24f;
+            if (Math.abs(dy) > slop * 1.2f && Math.abs(dy) >= Math.abs(dx)) {
+                mSplitHorizBlockedByPager = true;
+                return false;
+            }
+            if (Math.abs(dx) > slop * 1.5f && Math.abs(dx) > Math.abs(dy) * 1.45f) {
+                if (!validDir) {
+                    mSplitHorizBlockedByPager = true;
+                    return false;
+                }
+                mSplitHorizSwiping = true;
+                mNotificationStackScrollLayoutController.cancelLongPress();
+                // 准备入场面板的完整内容
+                if (currentlyQs) {
+                    // 控制面板 -> 通知页：恢复通知列表可见并解除 ShelfOnly，保留底部通知历史/清除按钮
+                    View nsslView = mNotificationStackScrollLayoutController.getView();
+                    if (nsslView != null) {
+                        nsslView.setVisibility(View.VISIBLE);
+                    }
+                    mNotificationStackScrollLayoutController.setShouldShowShelfOnly(false);
+                } else {
+                    // 通知页 -> 控制面板：提前激活 QS 展开态、可见与监听，确保切过去后磁贴立即可点
+                    mVisible = true;
+                    ScrimUtils.get().setQsVisible(true);
+                    setExpandImmediate(true);
+                    mExpansionHeight = getMaxExpansionHeight();
+                    mFullyExpanded = mExpansionHeight > 0;
+                    setExpanded(true);
+                    if (mQs != null) {
+                        mQs.setQsVisible(true);
+                        mQs.setExpanded(true);
+                    }
+                    setListening(true);
+                    updateExpansion();
+                }
+                MotionEvent cancel = MotionEvent.obtain(ev);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                if (mPanelView != null) {
+                    mPanelView.dispatchTouchEvent(cancel);
+                }
+                cancel.recycle();
+            } else {
+                return false;
+            }
+        }
+
         final View qsView = mQsFrame;
         final View nsslView = mNotificationStackScrollLayoutController.getView();
         final View outgoingView = currentlyQs ? qsView : nsslView;
         final View incomingView = currentlyQs ? nsslView : qsView;
-        final float panelW = (mPanelView != null && mPanelView.getWidth() > 0)
-                ? mPanelView.getWidth() : 1080f;
-        final boolean isRtl = mPanelView != null && mPanelView.isLayoutRtl();
-        final boolean validDir = !currentlyQs
-                ? (isRtl ? dx < 0 : dx > 0)
-                : (isRtl ? dx > 0 : dx < 0);
-        final float dirSign = !currentlyQs ? (isRtl ? -1f : 1f) : (isRtl ? 1f : -1f);
-        final float rawProgress = validDir ? Math.min(1f, Math.abs(dx) / (panelW * 0.55f)) : 0f;
+        final float rawProgress = validDir ? Math.min(1f, Math.abs(dx) / (panelW * 0.48f)) : 0f;
 
         if (action == MotionEvent.ACTION_MOVE) {
             if (!mSwipeInProgress) {
                 setSwipeInProgress(true);
             }
-            if (!currentlyQs && mQs != null && mQs.getView() != null
+            if (mQsFrame != null && mQsFrame.getVisibility() != View.VISIBLE) {
+                mQsFrame.setVisibility(View.VISIBLE);
+            }
+            if (mQs != null && mQs.getView() != null
                     && mQs.getView().getVisibility() != View.VISIBLE) {
                 mQs.getView().setVisibility(View.VISIBLE);
             }
             applySplitHorizontalTransitionFrame(
                     outgoingView, incomingView, dirSign, rawProgress, panelW);
-            return;
+            return true;
         }
 
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
@@ -2223,19 +2669,18 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                 mQsVelocityTracker.computeCurrentVelocity(1000);
                 vx = mQsVelocityTracker.getXVelocity();
             }
-            final boolean fastFling = (action == MotionEvent.ACTION_UP)
-                    && validDir && Math.abs(vx) > 850f;
-            final boolean distanceCommit = (action == MotionEvent.ACTION_UP)
-                    && validDir && Math.abs(dx) >= Math.max(mTouchSlop * 2.2f, panelW * 0.14f);
-            final boolean shouldSwitch = fastFling || distanceCommit;
+            final boolean dirAlignedVx = (dirSign > 0 && vx > 150f) || (dirSign < 0 && vx < -150f);
+            final boolean distanceCommit = validDir && Math.abs(dx) >= panelW * 0.08f;
+            final boolean shouldSwitch = (action == MotionEvent.ACTION_UP)
+                    && (dirAlignedVx || distanceCommit);
             final float targetProgress = shouldSwitch ? 1f : 0f;
 
             if (mSplitHorizAnimator != null) {
                 mSplitHorizAnimator.cancel();
             }
             mSplitHorizAnimator = android.animation.ValueAnimator.ofFloat(rawProgress, targetProgress);
-            final long duration = Math.max(140L,
-                    (long) (240f * Math.abs(targetProgress - rawProgress)));
+            final long duration = Math.max(130L,
+                    (long) (210f * Math.abs(targetProgress - rawProgress)));
             mSplitHorizAnimator.setDuration(duration);
             mSplitHorizAnimator.setInterpolator(
                     new android.view.animation.PathInterpolator(0.2f, 0.9f, 0.2f, 1.0f));
@@ -2249,18 +2694,17 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                 public void onAnimationEnd(android.animation.Animator animation) {
                     mSplitHorizAnimator = null;
                     setSwipeInProgress(false);
-                    resetSplitViewTransform(outgoingView);
-                    resetSplitViewTransform(incomingView);
                     if (shouldSwitch) {
-                        applyLegacySplitPanelMode(!currentlyQs);
+                        commitLegacySplitPanelState(!currentlyQs);
                     } else {
-                        updateQsState();
-                        updateExpansion();
+                        commitLegacySplitPanelState(currentlyQs);
                     }
                 }
             });
             mSplitHorizAnimator.start();
+            return true;
         }
+        return true;
     }
 
     /** intercepts touches on Qs panel area. */
@@ -2277,14 +2721,12 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             case MotionEvent.ACTION_DOWN:
                 mInitialTouchY = y;
                 mInitialTouchX = x;
-                mSplitHorizDownX = x;
-                mSplitHorizDownY = y;
-                mSplitHorizSwiping = false;
                 initVelocityTracker();
                 trackMovement(event);
                 float qsExpansionFraction = computeExpansionFraction();
                 // Intercept the touch if QS is between fully collapsed and fully expanded state
                 if (!mSplitShadeEnabled
+                        && !(isQsSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE && mLegacySplitShowingQs)
                         && qsExpansionFraction > 0.0 && qsExpansionFraction < 1.0) {
                     mShadeLog.logMotionEvent(event,
                             "onQsIntercept: down action, QS partially expanded/collapsed");
@@ -2327,11 +2769,6 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                         == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE
                         ? mTouchSlop * mSlopMultiplier
                         : mTouchSlop;
-                if (canStartLegacySplitHorizontalSwipe(x, y, touchSlop)) {
-                    mSplitHorizSwiping = true;
-                    mNotificationStackScrollLayoutController.cancelLongPress();
-                    return true;
-                }
                 if ((h > touchSlop || (h < -touchSlop && getExpanded()))
                         && Math.abs(h) > Math.abs(x - mInitialTouchX)
                         && shouldQuickSettingsIntercept(
@@ -2356,7 +2793,6 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
-                mSplitHorizSwiping = false;
                 trackMovement(event);
                 mShadeLog.logMotionEvent(event, "onQsIntercept: up action, QS tracking disabled");
                 setTracking(false);
@@ -2773,8 +3209,15 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                 mOneFingerQuickSettingsIntercept = TunerService.parseInteger(newValue, 0);
             } else if (QS_SPLIT_SHADE_SETTING.equals(key)) {
                 mQsSplitShadeEnabledLegacy = TunerService.parseInteger(newValue, 0) != 0;
+                sQsSplitShadeEnabled = mQsSplitShadeEnabledLegacy;
+                View nssl = mNotificationStackScrollLayoutController.getView();
+                if (nssl instanceof com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout) {
+                    ((com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout) nssl)
+                            .updateHyperOsSplitShadeSpacing(mQsSplitShadeEnabledLegacy);
+                }
                 updateQsSplitShadeState();
                 updateQsState();
+                updateSplitNotifOverlays();
             } else if (NOTIFICATION_ROW_TRANSPARENCY.equals(key) ||
                     NOTIFICATION_ROW_TRANSPARENCY_LOCKSCREEN.equals(key)) {
                 updateTransparencyIfNeeded();
