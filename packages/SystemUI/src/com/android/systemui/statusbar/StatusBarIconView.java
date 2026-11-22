@@ -569,12 +569,22 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
         return new ScalingDrawableWrapper(icon, scaleFactor);
     }
 
+    private boolean useHyperOsColoredAppIcon(@Nullable String pkgName) {
+        if (!isNotification() || pkgName == null
+                || TextUtils.equals(pkgName, SYSUI_PKG)
+                || TextUtils.equals(pkgName, "android")) {
+            return false;
+        }
+        return mNewIconStyle
+                || com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled;
+    }
+
     @Nullable
     private Drawable loadDrawable(Context context, StatusBarIcon statusBarIcon) {
         Drawable icon;
         String pkgName = statusBarIcon.pkg;
         try {
-            if (mNewIconStyle && !TextUtils.equals(pkgName, SYSUI_PKG)) {
+            if (useHyperOsColoredAppIcon(pkgName)) {
                 icon = context.getPackageManager().getApplicationIcon(pkgName);
             } else {
                 icon = getIcon(context, statusBarIcon);
@@ -690,9 +700,18 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
             mDotPaint.setAlpha((int) (alpha * 255));
             int cx = mNewStatusBarIconSize / 2;
             int cy = getHeight() / 2;
-            canvas.drawCircle(
-                    (float) cx, (float) cy,
-                    radius, mDotPaint);
+            if (com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled) {
+                float dotR = Math.max(1.5f, radius * 0.62f);
+                float gap = dotR * 3.2f;
+                float centerX = Math.max(getWidth() / 2f, dotR + gap);
+                canvas.drawCircle(centerX - gap, (float) cy, dotR, mDotPaint);
+                canvas.drawCircle(centerX, (float) cy, dotR, mDotPaint);
+                canvas.drawCircle(centerX + gap, (float) cy, dotR, mDotPaint);
+            } else {
+                canvas.drawCircle(
+                        (float) cx, (float) cy,
+                        radius, mDotPaint);
+            }
         }
     }
 
@@ -789,8 +808,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
      * transitioning this also immediately sets the color.
      */
     public void setStaticDrawableColor(int color) {
-        if (mNewIconStyle && isNotification() &&
-                (mIcon != null && !TextUtils.equals(mIcon.pkg, SYSUI_PKG))) {
+        if (mIcon != null && useHyperOsColoredAppIcon(mIcon.pkg)) {
             color = NO_COLOR;
         }
         mDrawableColor = color;
@@ -810,8 +828,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
             return;
         }
 
-        if (mNewIconStyle && isNotification()
-                && mIcon != null && !TextUtils.equals(mIcon.pkg, SYSUI_PKG)) {
+        if (mIcon != null && useHyperOsColoredAppIcon(mIcon.pkg)) {
             setColorFilter(null);
             setImageTintList(null);
             return;

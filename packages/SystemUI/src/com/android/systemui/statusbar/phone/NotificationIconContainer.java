@@ -454,6 +454,9 @@ public class NotificationIconContainer extends ViewGroup {
         mWasOverflowForced = false;
         int childCount = getChildCount();
         int maxVisibleIcons = mMaxIcons;
+        if (mIsStaticLayout && com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled) {
+            maxVisibleIcons = Math.min(maxVisibleIcons, 5);
+        }
         float layoutRight = getRightBound();
         mVisualOverflowStart = 0;
         mFirstVisibleIconState = null;

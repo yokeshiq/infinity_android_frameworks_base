@@ -428,7 +428,17 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
      * In general, we should be extremely sensitive to client code doing things in the wrong order;
      * if we detect that behavior, we should crash instantly.
      */
+    private static volatile ShadeListBuilder sInstance;
+
+    public static void rebuildForSplitShadeToggle() {
+        final ShadeListBuilder inst = sInstance;
+        if (inst != null) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(inst::buildList);
+        }
+    }
+
     private void buildList() {
+        sInstance = this;
         Trace.beginSection("ShadeListBuilder.buildList");
         mPipelineState.requireIsBefore(STATE_BUILD_STARTED);
         debugBundleLog(TAG, () -> mPipelineState.getStateName() + "---------------------");
@@ -654,6 +664,15 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
         for (PipelineEntry pipelineEntry : entries) {
             // since grouping hasn't happened yet, all notifs are NotificationEntries
             NotificationEntry entry = (NotificationEntry) pipelineEntry;
+            if (com.android.systemui.shade.QuickSettingsControllerImpl.sQsSplitShadeEnabled) {
+                if (entry.getSbn().isGroup()
+                        && entry.getSbn().getNotification().isGroupSummary()) {
+                    continue;
+                }
+                entry.setParent(ROOT_ENTRY);
+                out.add(entry);
+                continue;
+            }
             if (entry.getSbn().isGroup()) {
                 final String topLevelKey = entry.getSbn().getGroupKey();
                 GroupEntry group = mGroups.get(topLevelKey);

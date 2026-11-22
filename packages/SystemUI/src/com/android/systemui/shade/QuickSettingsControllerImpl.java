@@ -2341,19 +2341,46 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             int sidePad = (int) (24 * density);
             bar.setPadding(sidePad, 0, sidePad, 0);
 
-            // 左：通知历史
-            mSplitNotifHistoryBtn = buildMonetBlurCircleButton(ctx, density, sizePx,
-                    v -> launchSplitNotifIntent(ctx, "android.settings.NOTIFICATION_HISTORY"));
+            // 左：通知历史（默认隐藏，长按 × 时水平向左滑出）
+            mSplitNotifHistoryBtn = buildMonetBlurCircleButton(ctx, density, sizePx, v -> {
+                setSplitSideButtonsExpanded(false, true);
+                launchSplitNotifIntent(ctx, "android.settings.NOTIFICATION_HISTORY");
+            });
             mSplitNotifHistoryIcon = new android.widget.ImageView(ctx);
             mSplitNotifHistoryBtn.addView(mSplitNotifHistoryIcon, new android.widget.FrameLayout.LayoutParams(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            mSplitNotifHistoryBtn.setVisibility(View.GONE);
+            mSplitNotifHistoryBtn.setAlpha(0f);
             bar.addView(mSplitNotifHistoryBtn, new android.widget.FrameLayout.LayoutParams(
-                    sizePx, sizePx, android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL));
+                    sizePx, sizePx, android.view.Gravity.CENTER));
 
-            // 中：× 一键清除
-            mSplitNotifClearBtn = buildMonetBlurCircleButton(ctx, density, sizePx,
-                    v -> mNotificationStackScrollLayoutController.clearAllNotificationsFromSplitButton());
+            // 右：通知设置（默认隐藏，长按 × 时水平向右滑出）
+            mSplitNotifSettingsBtn = buildMonetBlurCircleButton(ctx, density, sizePx, v -> {
+                setSplitSideButtonsExpanded(false, true);
+                launchSplitNotifIntent(ctx, "android.settings.ALL_APPS_NOTIFICATION_SETTINGS");
+            });
+            mSplitNotifSettingsIcon = new android.widget.ImageView(ctx);
+            mSplitNotifSettingsBtn.addView(mSplitNotifSettingsIcon, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            mSplitNotifSettingsBtn.setVisibility(View.GONE);
+            mSplitNotifSettingsBtn.setAlpha(0f);
+            bar.addView(mSplitNotifSettingsBtn, new android.widget.FrameLayout.LayoutParams(
+                    sizePx, sizePx, android.view.Gravity.CENTER));
+
+            // 中：× 一键清除（上移至红圈位置，置于最前，长按向两侧平滑唤出历史/设置键）
+            mSplitNotifClearBtn = buildMonetBlurCircleButton(ctx, density, sizePx, v -> {
+                if (mSplitSideButtonsExpanded) {
+                    setSplitSideButtonsExpanded(false, true);
+                }
+                mNotificationStackScrollLayoutController.clearAllNotificationsFromSplitButton();
+            });
+            mSplitNotifClearBtn.setOnLongClickListener(v -> {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                setSplitSideButtonsExpanded(!mSplitSideButtonsExpanded, true);
+                return true;
+            });
             mSplitNotifClearIcon = new android.widget.TextView(ctx);
             mSplitNotifClearIcon.setText("×");
             mSplitNotifClearIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f);
@@ -2365,25 +2392,105 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             bar.addView(mSplitNotifClearBtn, new android.widget.FrameLayout.LayoutParams(
                     sizePx, sizePx, android.view.Gravity.CENTER));
 
-            // 右：通知设置
-            mSplitNotifSettingsBtn = buildMonetBlurCircleButton(ctx, density, sizePx,
-                    v -> launchSplitNotifIntent(ctx, "android.settings.ALL_APPS_NOTIFICATION_SETTINGS"));
-            mSplitNotifSettingsIcon = new android.widget.ImageView(ctx);
-            mSplitNotifSettingsBtn.addView(mSplitNotifSettingsIcon, new android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
-            bar.addView(mSplitNotifSettingsBtn, new android.widget.FrameLayout.LayoutParams(
-                    sizePx, sizePx, android.view.Gravity.END | android.view.Gravity.CENTER_VERTICAL));
-
             android.widget.FrameLayout.LayoutParams barLp = new android.widget.FrameLayout.LayoutParams(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                     sizePx,
                     android.view.Gravity.BOTTOM);
-            barLp.bottomMargin = (int) (32 * density);
+            barLp.bottomMargin = (int) (124 * density);
             bar.setVisibility(View.GONE);
             host.addView(bar, barLp);
             mSplitNotifBottomBar = bar;
             refreshAllSplitBottomButtonsMonet(ctx, density);
+        }
+    }
+
+    private boolean mSplitSideButtonsExpanded = false;
+
+    private void setSplitSideButtonsExpanded(boolean expanded, boolean animate) {
+        mSplitSideButtonsExpanded = expanded;
+        if (mSplitNotifHistoryBtn == null || mSplitNotifSettingsBtn == null || mPanelView == null) {
+            return;
+        }
+        final float density = mPanelView.getContext().getResources().getDisplayMetrics().density;
+        final float slideOffset = 88f * density;
+        final android.view.animation.DecelerateInterpolator interp =
+                new android.view.animation.DecelerateInterpolator(1.6f);
+
+        mSplitNotifHistoryBtn.animate().cancel();
+        mSplitNotifSettingsBtn.animate().cancel();
+
+        if (expanded) {
+            mSplitNotifHistoryBtn.setVisibility(View.VISIBLE);
+            mSplitNotifSettingsBtn.setVisibility(View.VISIBLE);
+            if (animate) {
+                mSplitNotifHistoryBtn.setTranslationX(0f);
+                mSplitNotifHistoryBtn.setScaleX(0.75f);
+                mSplitNotifHistoryBtn.setScaleY(0.75f);
+                mSplitNotifHistoryBtn.setAlpha(0f);
+                mSplitNotifHistoryBtn.animate()
+                        .translationX(-slideOffset)
+                        .scaleX(1f).scaleY(1f)
+                        .alpha(1f)
+                        .setDuration(260)
+                        .setInterpolator(interp)
+                        .start();
+
+                mSplitNotifSettingsBtn.setTranslationX(0f);
+                mSplitNotifSettingsBtn.setScaleX(0.75f);
+                mSplitNotifSettingsBtn.setScaleY(0.75f);
+                mSplitNotifSettingsBtn.setAlpha(0f);
+                mSplitNotifSettingsBtn.animate()
+                        .translationX(slideOffset)
+                        .scaleX(1f).scaleY(1f)
+                        .alpha(1f)
+                        .setDuration(260)
+                        .setInterpolator(interp)
+                        .start();
+            } else {
+                mSplitNotifHistoryBtn.setTranslationX(-slideOffset);
+                mSplitNotifHistoryBtn.setScaleX(1f);
+                mSplitNotifHistoryBtn.setScaleY(1f);
+                mSplitNotifHistoryBtn.setAlpha(1f);
+                mSplitNotifSettingsBtn.setTranslationX(slideOffset);
+                mSplitNotifSettingsBtn.setScaleX(1f);
+                mSplitNotifSettingsBtn.setScaleY(1f);
+                mSplitNotifSettingsBtn.setAlpha(1f);
+            }
+        } else {
+            if (animate) {
+                mSplitNotifHistoryBtn.animate()
+                        .translationX(0f)
+                        .scaleX(0.75f).scaleY(0.75f)
+                        .alpha(0f)
+                        .setDuration(200)
+                        .setInterpolator(interp)
+                        .withEndAction(() -> {
+                            if (!mSplitSideButtonsExpanded && mSplitNotifHistoryBtn != null) {
+                                mSplitNotifHistoryBtn.setVisibility(View.GONE);
+                            }
+                        })
+                        .start();
+
+                mSplitNotifSettingsBtn.animate()
+                        .translationX(0f)
+                        .scaleX(0.75f).scaleY(0.75f)
+                        .alpha(0f)
+                        .setDuration(200)
+                        .setInterpolator(interp)
+                        .withEndAction(() -> {
+                            if (!mSplitSideButtonsExpanded && mSplitNotifSettingsBtn != null) {
+                                mSplitNotifSettingsBtn.setVisibility(View.GONE);
+                            }
+                        })
+                        .start();
+            } else {
+                mSplitNotifHistoryBtn.setTranslationX(0f);
+                mSplitNotifHistoryBtn.setAlpha(0f);
+                mSplitNotifHistoryBtn.setVisibility(View.GONE);
+                mSplitNotifSettingsBtn.setTranslationX(0f);
+                mSplitNotifSettingsBtn.setAlpha(0f);
+                mSplitNotifSettingsBtn.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -2422,9 +2529,14 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         final float alpha = showNotifOverlay
                 ? MathUtils.constrain((mShadeExpandedFraction - 0.2f) / 0.8f, 0f, 1f)
                 : 0f;
-        setCircleBtnBlurAlpha(mSplitNotifHistoryBtn, alpha, density);
+        if (!showNotifOverlay && mSplitSideButtonsExpanded) {
+            setSplitSideButtonsExpanded(false, false);
+        }
         setCircleBtnBlurAlpha(mSplitNotifClearBtn, alpha, density);
-        setCircleBtnBlurAlpha(mSplitNotifSettingsBtn, alpha, density);
+        if (mSplitSideButtonsExpanded) {
+            setCircleBtnBlurAlpha(mSplitNotifHistoryBtn, alpha, density);
+            setCircleBtnBlurAlpha(mSplitNotifSettingsBtn, alpha, density);
+        }
 
         if (mSplitNotifClockContainer != null) {
             mSplitNotifClockContainer.setVisibility(showNotifOverlay ? View.VISIBLE : View.GONE);
@@ -2480,7 +2592,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
     private void commitLegacySplitPanelState(boolean targetIsQs) {
         mLegacySplitShowingQs = targetIsQs;
-        setExpandImmediate(targetIsQs);
+        // 切页完成后面板已处于静止展开态，必须复位 ExpandImmediate 与 mTracking，
+        // 否则父容器会把后续磁贴点击误拦截为收起手势，且干扰上滑退出
+        setExpandImmediate(false);
         int maxH = getMaxExpansionHeight();
         if (maxH <= 0 && mQs != null && mQs.getView() != null) {
             maxH = mQs.getView().getHeight();
@@ -2489,9 +2603,10 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             maxH = mPanelView.getHeight();
         }
         int targetHeight = targetIsQs ? maxH : getMinExpansionHeight();
-        mExpansionHeight = targetHeight;
-        mFullyExpanded = targetIsQs && targetHeight > 0;
         setExpanded(targetIsQs);
+        mFullyExpanded = targetIsQs && targetHeight > 0;
+        setExpansionHeight(targetHeight);
+        updateExpansion();
         setQsFullScreen(false);
         mShadeRepository.setQsExpansion(targetIsQs ? 1f : 0f);
         if (mExpansionHeightListener != null) {
@@ -2533,6 +2648,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             if (!targetIsQs) {
                 mNotificationStackScrollLayoutController.refreshFooter();
                 nsslView.requestLayout();
+                nsslView.post(() -> hideNativeFooterView(nsslView, true));
             }
         }
         updateQsState();
@@ -3215,6 +3331,16 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                     ((com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout) nssl)
                             .updateHyperOsSplitShadeSpacing(mQsSplitShadeEnabledLegacy);
                 }
+                if (mQsSplitShadeEnabledLegacy && mPanelView != null) {
+                    float density = mPanelView.getContext().getResources().getDisplayMetrics().density;
+                    refreshAllSplitBottomButtonsMonet(mPanelView.getContext(), density);
+                }
+                if (nssl != null) {
+                    hideNativeFooterView(nssl, mQsSplitShadeEnabledLegacy);
+                    nssl.requestLayout();
+                }
+                com.android.systemui.statusbar.notification.collection.ShadeListBuilder
+                        .rebuildForSplitShadeToggle();
                 updateQsSplitShadeState();
                 updateQsState();
                 updateSplitNotifOverlays();
